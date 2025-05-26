@@ -1333,7 +1333,7 @@ export class Client extends GameShell {
             }
             if (reply === 3) {
                 this.loginMessage0 = '';
-                this.loginMessage1 = 'Invalid username or password.';
+                this.loginMessage1 = 'Invalid 2423423 or password.';
                 return;
             }
             if (reply === 4) {

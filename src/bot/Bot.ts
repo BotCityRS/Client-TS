@@ -13,7 +13,7 @@ export default class Bot {
 
     constructor(client: Client) {
         console.info("hi")
-        document.onload(() => {
+        window?.onload(() => {
             window.bot = this;
         })
         this.client = client;
