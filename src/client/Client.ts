@@ -298,7 +298,7 @@ export class Client extends GameShell {
     imageTitlebutton: Pix8 | null = null;
     loginMessage0: string = '';
     loginMessage1: string = '';
-    usernameInput: string = '';
+    usernameInput: string = 'test';
     passwordInput: string = '';
 
     // fonts
