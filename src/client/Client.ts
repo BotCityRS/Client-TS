@@ -299,7 +299,7 @@ export class Client extends GameShell {
     loginMessage0: string = '';
     loginMessage1: string = '';
     usernameInput: string = 'test';
-    passwordInput: string = '';
+    passwordInput: string = 'test';
 
     // fonts
     fontPlain11: PixFont | null = null;
@@ -1431,8 +1431,6 @@ export class Client extends GameShell {
         this.netStream = null;
         this.ingame = false;
         this.titleScreenState = 0;
-        this.usernameInput = '';
-        this.passwordInput = '';
 
         InputTracking.setDisabled();
         this.clearCaches();
@@ -7932,6 +7930,12 @@ export class Client extends GameShell {
         const a: number = this.menuParamA[optionId];
         const b: number = this.menuParamB[optionId];
         const c: number = this.menuParamC[optionId];
+
+        if (action == 3214 || a == 3214 || b == 3214 || c == 3214) {
+            console.info('aay)')
+        }
+
+        console.info('Menu action: ', action, a, b, c)
 
         if (action >= 2000) {
             action -= 2000;

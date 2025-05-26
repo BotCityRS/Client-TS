@@ -9,36 +9,36 @@ import InputTracking from '#/client/InputTracking.js';
 import { MobileKeyboard } from '#3rdparty/deps.js';
 
 export default abstract class GameShell {
-    protected slowestMS: number = 0.0; // custom
-    protected averageMS: number[] = []; // custom
-    protected averageIndexMS: number = 0; // custom
+    slowestMS: number = 0.0; // custom
+    averageMS: number[] = []; // custom
+    averageIndexMS: number = 0; // custom
 
-    protected drawArea: PixMap | null = null;
-    protected state: number = 0;
-    protected deltime: number = 20;
-    protected mindel: number = 1;
-    protected otim: number[] = [];
-    protected fps: number = 0;
-    protected fpos: number = 0;
-    protected frameTime: number[] = [];
-    protected redrawScreen: boolean = true;
-    protected resizeToFit: boolean = false;
-    protected tfps: number = 50; // custom
-    protected hasFocus: boolean = true; // mapview applet
+    drawArea: PixMap | null = null;
+    state: number = 0;
+    deltime: number = 20;
+    mindel: number = 1;
+    otim: number[] = [];
+    fps: number = 0;
+    fpos: number = 0;
+    frameTime: number[] = [];
+    redrawScreen: boolean = true;
+    resizeToFit: boolean = false;
+    tfps: number = 50; // custom
+    hasFocus: boolean = true; // mapview applet
 
-    protected ingame: boolean = false;
+    ingame: boolean = false;
 
-    protected idleCycles: number = performance.now();
-    protected mouseButton: number = 0;
-    protected mouseX: number = -1;
-    protected mouseY: number = -1;
-    protected mouseClickButton: number = 0;
-    protected mouseClickX: number = -1;
-    protected mouseClickY: number = -1;
-    protected actionKey: number[] = [];
-    protected keyQueue: number[] = [];
-    protected keyQueueReadPos: number = 0;
-    protected keyQueueWritePos: number = 0;
+    idleCycles: number = performance.now();
+    mouseButton: number = 0;
+    mouseX: number = -1;
+    mouseY: number = -1;
+    mouseClickButton: number = 0;
+    mouseClickX: number = -1;
+    mouseClickY: number = -1;
+    actionKey: number[] = [];
+    keyQueue: number[] = [];
+    keyQueueReadPos: number = 0;
+    keyQueueWritePos: number = 0;
 
     // touch controls
     private touching: boolean = false;
@@ -59,10 +59,10 @@ export default abstract class GameShell {
     abstract getViewportInterfaceId(): number;
     abstract getReportAbuseInterfaceId(): number; // custom: report abuse input on mobile
 
-    protected async load() {}
-    protected async update() {}
-    protected async draw() {}
-    protected async refresh() {}
+    async load() {}
+    async update() {}
+    async draw() {}
+    async refresh() {}
 
     constructor(resizetoFit: boolean = false) {
         canvas.tabIndex = -1;
@@ -76,15 +76,15 @@ export default abstract class GameShell {
         }
     }
 
-    protected get width(): number {
+    get width(): number {
         return canvas.width;
     }
 
-    protected get height(): number {
+    get height(): number {
         return canvas.height;
     }
 
-    protected resize(width: number, height: number) {
+    resize(width: number, height: number) {
         canvas.width = width;
         canvas.height = height;
         this.drawArea = new PixMap(width, height);
@@ -229,35 +229,35 @@ export default abstract class GameShell {
         }
     }
 
-    protected shutdown() {
+    shutdown() {
         this.state = -2;
     }
 
-    protected setFramerate(rate: number) {
+    setFramerate(rate: number) {
         this.deltime = (1000 / rate) | 0;
     }
 
-    protected setTargetedFramerate(rate: number) {
+    setTargetedFramerate(rate: number) {
         this.tfps = Math.max(Math.min(50, rate | 0), 0);
     }
 
-    protected start() {
+    start() {
         if (this.state >= 0) {
             this.state = 0;
         }
     }
 
-    protected stop() {
+    stop() {
         if (this.state >= 0) {
             this.state = (4000 / this.deltime) | 0;
         }
     }
 
-    protected destroy() {
+    destroy() {
         this.state = -1;
     }
 
-    protected async showProgress(progress: number, message: string): Promise<void> {
+    async showProgress(progress: number, message: string): Promise<void> {
         const width: number = this.width;
         const height: number = this.height;
 
@@ -288,7 +288,7 @@ export default abstract class GameShell {
         await sleep(5); // return a slice of time to the main loop so it can update the progress bar
     }
 
-    protected pollKey() {
+    pollKey() {
         let key: number = -1;
         if (this.keyQueueWritePos !== this.keyQueueReadPos) {
             key = this.keyQueue[this.keyQueueReadPos];
@@ -297,7 +297,7 @@ export default abstract class GameShell {
         return key;
     }
 
-    protected get ms(): number {
+    get ms(): number {
         const length: number = this.frameTime.length;
         let ft: number = 0;
         for (let index: number = 0; index < length; index++) {
@@ -312,7 +312,7 @@ export default abstract class GameShell {
         return ms;
     }
 
-    protected get msAvg(): number {
+    get msAvg(): number {
         return this.averageMS.reduce((accumulator: number, currentValue: number): number => accumulator + currentValue, 0) / 250; // 250 circular limit
     }
 
@@ -627,7 +627,7 @@ export default abstract class GameShell {
         this.my = this.ny;
     }
 
-    protected get isMobile(): boolean {
+    get isMobile(): boolean {
         const keywords: string[] = ['Android', 'webOS', 'iPhone', 'iPad', 'iPod', 'BlackBerry', 'Windows Phone'];
         if (keywords.some((keyword: string): boolean => navigator.userAgent.includes(keyword))) {
             return true;
