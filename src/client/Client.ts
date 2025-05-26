@@ -65,6 +65,7 @@ import WordFilter from '#/wordenc/WordFilter.js';
 import WordPack from '#/wordenc/WordPack.js';
 
 import Wave from '#/sound/Wave.js';
+import Bot from '#/bot/Bot';
 
 const enum Constants {
     CLIENT_VERSION = 225,
@@ -80,172 +81,172 @@ export class Client extends GameShell {
     static lowMemory: boolean = false;
     static alreadyStarted: boolean = false;
 
-    private loopCycle: number = 0;
-    private systemUpdateTimer: number = 0;
+    loopCycle: number = 0;
+    systemUpdateTimer: number = 0;
 
-    private hintType: number = 0;
-    private hintNpc: number = 0;
-    private hintTileX: number = 0;
-    private hintTileZ: number = 0;
-    private hintPlayer: number = 0;
-    private hintOffsetX: number = 0;
-    private hintOffsetZ: number = 0;
-    private hintHeight: number = 0;
+    hintType: number = 0;
+    hintNpc: number = 0;
+    hintTileX: number = 0;
+    hintTileZ: number = 0;
+    hintPlayer: number = 0;
+    hintOffsetX: number = 0;
+    hintOffsetZ: number = 0;
+    hintHeight: number = 0;
 
-    private titleScreenState: number = 0;
+    titleScreenState: number = 0;
 
-    private npcs: (NpcEntity | null)[] = new TypedArray1d(8192, null);
-    private npcCount: number = 0;
-    private npcIds: Int32Array = new Int32Array(8192);
+    npcs: (NpcEntity | null)[] = new TypedArray1d(8192, null);
+    npcCount: number = 0;
+    npcIds: Int32Array = new Int32Array(8192);
 
-    private netStream: ClientStream | null = null;
-    private out: Packet = Packet.alloc(1);
-    private loginout: Packet = Packet.alloc(1);
-    private in: Packet = Packet.alloc(1);
-    private inPacketSize: number = 0;
-    private inPacketType: number = 0;
-    private idleNetCycles: number = 0;
-    private idleTimeout: number = 0;
-    private lastPacketType0: number = 0;
-    private lastPacketType1: number = 0;
-    private lastPacketType2: number = 0;
+    netStream: ClientStream | null = null;
+    out: Packet = Packet.alloc(1);
+    loginout: Packet = Packet.alloc(1);
+    in: Packet = Packet.alloc(1);
+    inPacketSize: number = 0;
+    inPacketType: number = 0;
+    idleNetCycles: number = 0;
+    idleTimeout: number = 0;
+    lastPacketType0: number = 0;
+    lastPacketType1: number = 0;
+    lastPacketType2: number = 0;
 
-    private sceneBaseTileX: number = 0;
-    private sceneBaseTileZ: number = 0;
-    private scene: World3D | null = null;
-    private sceneMapLocData: (Uint8Array | null)[] | null = null;
-    private sceneMapLocReady: boolean[] | null = null;
-    private levelTileFlags: Uint8Array[][] | null = null;
-    private levelHeightmap: Int32Array[][] | null = null;
-    private levelCollisionMap: (CollisionMap | null)[] = new TypedArray1d(CollisionConstants.LEVELS, null);
-    private baseX: number = 0;
-    private baseZ: number = 0;
-    private tryMoveNearest: number = 0;
+    sceneBaseTileX: number = 0;
+    sceneBaseTileZ: number = 0;
+    scene: World3D | null = null;
+    sceneMapLocData: (Uint8Array | null)[] | null = null;
+    sceneMapLocReady: boolean[] | null = null;
+    levelTileFlags: Uint8Array[][] | null = null;
+    levelHeightmap: Int32Array[][] | null = null;
+    levelCollisionMap: (CollisionMap | null)[] = new TypedArray1d(CollisionConstants.LEVELS, null);
+    baseX: number = 0;
+    baseZ: number = 0;
+    tryMoveNearest: number = 0;
 
-    private cameraAnticheatOffsetX: number = 0;
-    private cameraOffsetXModifier: number = 2;
-    private cameraAnticheatOffsetZ: number = 0;
-    private cameraOffsetZModifier: number = 2;
-    private cameraAnticheatAngle: number = 0;
-    private cameraOffsetYawModifier: number = 1;
-    private cameraOffsetCycle: number = 0;
+    cameraAnticheatOffsetX: number = 0;
+    cameraOffsetXModifier: number = 2;
+    cameraAnticheatOffsetZ: number = 0;
+    cameraOffsetZModifier: number = 2;
+    cameraAnticheatAngle: number = 0;
+    cameraOffsetYawModifier: number = 1;
+    cameraOffsetCycle: number = 0;
 
-    private minimapAnticheatAngle: number = 0;
-    private minimapAngleModifier: number = 2;
-    private minimapZoom: number = 0;
-    private minimapZoomModifier: number = 1;
-    private minimapOffsetCycle: number = 0;
+    minimapAnticheatAngle: number = 0;
+    minimapAngleModifier: number = 2;
+    minimapZoom: number = 0;
+    minimapZoomModifier: number = 1;
+    minimapOffsetCycle: number = 0;
 
-    private sceneDelta: number = 0;
+    sceneDelta: number = 0;
 
-    private imageCompass: Pix24 | null = null;
-    private imageMapscene: (Pix8 | null)[] = new TypedArray1d(50, null);
-    private imageMapfunction: (Pix24 | null)[] = new TypedArray1d(50, null);
-    private imageHitmarks: (Pix24 | null)[] = new TypedArray1d(20, null);
-    private imageHeadicons: (Pix24 | null)[] = new TypedArray1d(20, null);
-    private imageMapflag: Pix24 | null = null;
-    private imageCrosses: (Pix24 | null)[] = new TypedArray1d(8, null);
-    private imageMapdot0: Pix24 | null = null;
-    private imageMapdot1: Pix24 | null = null;
-    private imageMapdot2: Pix24 | null = null;
-    private imageMapdot3: Pix24 | null = null;
-    private imageScrollbar0: Pix8 | null = null;
-    private imageScrollbar1: Pix8 | null = null;
-    private imageMapback: Pix8 | null = null;
-    private compassMaskLineOffsets: Int32Array = new Int32Array(33);
-    private compassMaskLineLengths: Int32Array = new Int32Array(33);
-    private minimapMaskLineOffsets: Int32Array = new Int32Array(151);
-    private minimapMaskLineLengths: Int32Array = new Int32Array(151);
+    imageCompass: Pix24 | null = null;
+    imageMapscene: (Pix8 | null)[] = new TypedArray1d(50, null);
+    imageMapfunction: (Pix24 | null)[] = new TypedArray1d(50, null);
+    imageHitmarks: (Pix24 | null)[] = new TypedArray1d(20, null);
+    imageHeadicons: (Pix24 | null)[] = new TypedArray1d(20, null);
+    imageMapflag: Pix24 | null = null;
+    imageCrosses: (Pix24 | null)[] = new TypedArray1d(8, null);
+    imageMapdot0: Pix24 | null = null;
+    imageMapdot1: Pix24 | null = null;
+    imageMapdot2: Pix24 | null = null;
+    imageMapdot3: Pix24 | null = null;
+    imageScrollbar0: Pix8 | null = null;
+    imageScrollbar1: Pix8 | null = null;
+    imageMapback: Pix8 | null = null;
+    compassMaskLineOffsets: Int32Array = new Int32Array(33);
+    compassMaskLineLengths: Int32Array = new Int32Array(33);
+    minimapMaskLineOffsets: Int32Array = new Int32Array(151);
+    minimapMaskLineLengths: Int32Array = new Int32Array(151);
 
-    private cameraX: number = 0;
-    private cameraY: number = 0;
-    private cameraZ: number = 0;
-    private cameraPitch: number = 0;
-    private cameraYaw: number = 0;
+    cameraX: number = 0;
+    cameraY: number = 0;
+    cameraZ: number = 0;
+    cameraPitch: number = 0;
+    cameraYaw: number = 0;
 
-    private orbitCameraX: number = 0;
-    private orbitCameraZ: number = 0;
-    private orbitCameraPitch: number = 128;
-    private orbitCameraPitchVelocity: number = 0;
-    private orbitCameraYaw: number = 0;
-    private orbitCameraYawVelocity: number = 0;
-    private cameraPitchClamp: number = 0;
+    orbitCameraX: number = 0;
+    orbitCameraZ: number = 0;
+    orbitCameraPitch: number = 128;
+    orbitCameraPitchVelocity: number = 0;
+    orbitCameraYaw: number = 0;
+    orbitCameraYawVelocity: number = 0;
+    cameraPitchClamp: number = 0;
 
-    private tileLastOccupiedCycle: Int32Array[] = new Int32Array2d(CollisionConstants.SIZE, CollisionConstants.SIZE);
-    private sceneCycle: number = 0;
+    tileLastOccupiedCycle: Int32Array[] = new Int32Array2d(CollisionConstants.SIZE, CollisionConstants.SIZE);
+    sceneCycle: number = 0;
 
-    private projectX: number = 0;
-    private projectY: number = 0;
+    projectX: number = 0;
+    projectY: number = 0;
 
-    private crossX: number = 0;
-    private crossY: number = 0;
-    private crossCycle: number = 0;
-    private crossMode: number = 0;
+    crossX: number = 0;
+    crossY: number = 0;
+    crossCycle: number = 0;
+    crossMode: number = 0;
 
-    private objDragArea: number = 0;
-    private objGrabX: number = 0;
-    private objGrabY: number = 0;
-    private objDragSlot: number = 0;
-    private objGrabThreshold: boolean = false;
+    objDragArea: number = 0;
+    objGrabX: number = 0;
+    objGrabY: number = 0;
+    objDragSlot: number = 0;
+    objGrabThreshold: boolean = false;
 
-    private overrideChat: number = 0;
+    overrideChat: number = 0;
 
-    private players: (PlayerEntity | null)[] = new TypedArray1d(Constants.MAX_PLAYER_COUNT, null);
-    private playerCount: number = 0;
-    private playerIds: Int32Array = new Int32Array(Constants.MAX_PLAYER_COUNT);
-    private entityUpdateCount: number = 0;
-    private entityUpdateIds: Int32Array = new Int32Array(Constants.MAX_PLAYER_COUNT);
-    private playerAppearanceBuffer: (Packet | null)[] = new TypedArray1d(Constants.MAX_PLAYER_COUNT, null);
-    private entityRemovalCount: number = 0;
-    private entityRemovalIds: Int32Array = new Int32Array(1000);
+    players: (PlayerEntity | null)[] = new TypedArray1d(Constants.MAX_PLAYER_COUNT, null);
+    playerCount: number = 0;
+    playerIds: Int32Array = new Int32Array(Constants.MAX_PLAYER_COUNT);
+    entityUpdateCount: number = 0;
+    entityUpdateIds: Int32Array = new Int32Array(Constants.MAX_PLAYER_COUNT);
+    playerAppearanceBuffer: (Packet | null)[] = new TypedArray1d(Constants.MAX_PLAYER_COUNT, null);
+    entityRemovalCount: number = 0;
+    entityRemovalIds: Int32Array = new Int32Array(1000);
 
-    private projectiles: LinkList = new LinkList();
-    private spotanims: LinkList = new LinkList();
-    private objStacks: (LinkList | null)[][][] = new TypedArray3d(CollisionConstants.LEVELS, CollisionConstants.SIZE, CollisionConstants.SIZE, null);
-    private addedLocs: LinkList = new LinkList();
-    private locList: LinkList = new LinkList();
+    projectiles: LinkList = new LinkList();
+    spotanims: LinkList = new LinkList();
+    objStacks: (LinkList | null)[][][] = new TypedArray3d(CollisionConstants.LEVELS, CollisionConstants.SIZE, CollisionConstants.SIZE, null);
+    addedLocs: LinkList = new LinkList();
+    locList: LinkList = new LinkList();
 
-    private skillLevel: number[] = [];
-    private skillBaseLevel: number[] = [];
-    private skillExperience: number[] = [];
+    skillLevel: number[] = [];
+    skillBaseLevel: number[] = [];
+    skillExperience: number[] = [];
 
-    private mouseButtonsOption: number = 0;
-    private menuVisible: boolean = false;
-    private menuSize: number = 0;
-    private menuParamB: Int32Array = new Int32Array(500);
-    private menuParamC: Int32Array = new Int32Array(500);
-    private menuAction: Int32Array = new Int32Array(500);
-    private menuParamA: Int32Array = new Int32Array(500);
-    private chatEffects: number = 0;
-    private energy: number = 0;
-    private weightCarried: number = 0;
-    private rights: boolean = false;
+    mouseButtonsOption: number = 0;
+    menuVisible: boolean = false;
+    menuSize: number = 0;
+    menuParamB: Int32Array = new Int32Array(500);
+    menuParamC: Int32Array = new Int32Array(500);
+    menuAction: Int32Array = new Int32Array(500);
+    menuParamA: Int32Array = new Int32Array(500);
+    chatEffects: number = 0;
+    energy: number = 0;
+    weightCarried: number = 0;
+    rights: boolean = false;
 
-    private messageTextType: Int32Array = new Int32Array(100);
-    private messageTextSender: (string | null)[] = new TypedArray1d(100, null);
-    private messageText: (string | null)[] = new TypedArray1d(100, null);
-    private publicChatSetting: number = 0;
-    private privateChatSetting: number = 0;
-    private tradeChatSetting: number = 0;
+    messageTextType: Int32Array = new Int32Array(100);
+    messageTextSender: (string | null)[] = new TypedArray1d(100, null);
+    messageText: (string | null)[] = new TypedArray1d(100, null);
+    publicChatSetting: number = 0;
+    privateChatSetting: number = 0;
+    tradeChatSetting: number = 0;
 
-    private minimapLevel: number = -1;
-    private activeMapFunctionCount: number = 0;
-    private activeMapFunctionX: Int32Array = new Int32Array(1000);
-    private activeMapFunctionZ: Int32Array = new Int32Array(1000);
-    private activeMapFunctions: (Pix24 | null)[] = new TypedArray1d(1000, null);
+    minimapLevel: number = -1;
+    activeMapFunctionCount: number = 0;
+    activeMapFunctionX: Int32Array = new Int32Array(1000);
+    activeMapFunctionZ: Int32Array = new Int32Array(1000);
+    activeMapFunctions: (Pix24 | null)[] = new TypedArray1d(1000, null);
 
-    private flagSceneTileX: number = 0;
-    private flagSceneTileZ: number = 0;
+    flagSceneTileX: number = 0;
+    flagSceneTileZ: number = 0;
 
-    private waveDelay: Int32Array = new Int32Array(50);
-    private waveCount: number = 0;
+    waveDelay: Int32Array = new Int32Array(50);
+    waveCount: number = 0;
 
-    private cutscene: boolean = false;
-    private cameraModifierEnabled: boolean[] = new TypedArray1d(5, false);
-    private cameraModifierJitter: Int32Array = new Int32Array(5);
-    private cameraModifierWobbleScale: Int32Array = new Int32Array(5);
-    private cameraModifierWobbleSpeed: Int32Array = new Int32Array(5);
-    private cameraModifierCycle: Int32Array = new Int32Array(5);
+    cutscene: boolean = false;
+    cameraModifierEnabled: boolean[] = new TypedArray1d(5, false);
+    cameraModifierJitter: Int32Array = new Int32Array(5);
+    cameraModifierWobbleScale: Int32Array = new Int32Array(5);
+    cameraModifierWobbleSpeed: Int32Array = new Int32Array(5);
+    cameraModifierCycle: Int32Array = new Int32Array(5);
 
     // unsorted:
     static cyclelogic1: number = 0;
@@ -267,251 +268,253 @@ export class Client extends GameShell {
 
     static levelExperience: number[] = [];
 
-    private errorStarted: boolean = false;
-    private errorLoading: boolean = false;
-    private errorHost: boolean = false;
-    private errorMessage: string | null = null;
+    errorStarted: boolean = false;
+    errorLoading: boolean = false;
+    errorHost: boolean = false;
+    errorMessage: string | null = null;
 
     // important client stuff
-    private db: Database | null = null;
-    private archiveChecksums: number[] = [];
-    private serverSeed: bigint = 0n;
-    private randomIn: Isaac | null = null;
+    db: Database | null = null;
+    archiveChecksums: number[] = [];
+    serverSeed: bigint = 0n;
+    randomIn: Isaac | null = null;
 
     // archives
-    private titleArchive: Jagfile | null = null;
+    titleArchive: Jagfile | null = null;
 
     // login screen properties
-    private redrawTitleBackground: boolean = true;
-    private titleLoginField: number = 0;
-    private imageTitle2: PixMap | null = null;
-    private imageTitle3: PixMap | null = null;
-    private imageTitle4: PixMap | null = null;
-    private imageTitle0: PixMap | null = null;
-    private imageTitle1: PixMap | null = null;
-    private imageTitle5: PixMap | null = null;
-    private imageTitle6: PixMap | null = null;
-    private imageTitle7: PixMap | null = null;
-    private imageTitle8: PixMap | null = null;
-    private imageTitlebox: Pix8 | null = null;
-    private imageTitlebutton: Pix8 | null = null;
-    private loginMessage0: string = '';
-    private loginMessage1: string = '';
-    private usernameInput: string = '';
-    private passwordInput: string = '';
+    redrawTitleBackground: boolean = true;
+    titleLoginField: number = 0;
+    imageTitle2: PixMap | null = null;
+    imageTitle3: PixMap | null = null;
+    imageTitle4: PixMap | null = null;
+    imageTitle0: PixMap | null = null;
+    imageTitle1: PixMap | null = null;
+    imageTitle5: PixMap | null = null;
+    imageTitle6: PixMap | null = null;
+    imageTitle7: PixMap | null = null;
+    imageTitle8: PixMap | null = null;
+    imageTitlebox: Pix8 | null = null;
+    imageTitlebutton: Pix8 | null = null;
+    loginMessage0: string = '';
+    loginMessage1: string = '';
+    usernameInput: string = '';
+    passwordInput: string = '';
 
     // fonts
-    private fontPlain11: PixFont | null = null;
-    private fontPlain12: PixFont | null = null;
-    private fontBold12: PixFont | null = null;
-    private fontQuill8: PixFont | null = null;
+    fontPlain11: PixFont | null = null;
+    fontPlain12: PixFont | null = null;
+    fontBold12: PixFont | null = null;
+    fontQuill8: PixFont | null = null;
 
     // login screen pillar flames properties
-    private imageRunes: Pix8[] = [];
-    private flameActive: boolean = false;
-    private imageFlamesLeft: Pix24 | null = null;
-    private imageFlamesRight: Pix24 | null = null;
-    private flameBuffer1: Int32Array | null = null;
-    private flameBuffer0: Int32Array | null = null;
-    private flameBuffer3: Int32Array | null = null;
-    private flameBuffer2: Int32Array | null = null;
-    private flameGradient: Int32Array | null = null;
-    private flameGradient0: Int32Array | null = null;
-    private flameGradient1: Int32Array | null = null;
-    private flameGradient2: Int32Array | null = null;
-    private flameLineOffset: Int32Array = new Int32Array(256);
-    private flameCycle0: number = 0;
-    private flameGradientCycle0: number = 0;
-    private flameGradientCycle1: number = 0;
-    private flamesInterval: Timer | null = null;
+    imageRunes: Pix8[] = [];
+    flameActive: boolean = false;
+    imageFlamesLeft: Pix24 | null = null;
+    imageFlamesRight: Pix24 | null = null;
+    flameBuffer1: Int32Array | null = null;
+    flameBuffer0: Int32Array | null = null;
+    flameBuffer3: Int32Array | null = null;
+    flameBuffer2: Int32Array | null = null;
+    flameGradient: Int32Array | null = null;
+    flameGradient0: Int32Array | null = null;
+    flameGradient1: Int32Array | null = null;
+    flameGradient2: Int32Array | null = null;
+    flameLineOffset: Int32Array = new Int32Array(256);
+    flameCycle0: number = 0;
+    flameGradientCycle0: number = 0;
+    flameGradientCycle1: number = 0;
+    flamesInterval: Timer | null = null;
 
     // game world properties
-    private areaSidebar: PixMap | null = null;
-    private areaMapback: PixMap | null = null;
-    private areaViewport: PixMap | null = null;
-    private areaChatback: PixMap | null = null;
-    private areaBackbase1: PixMap | null = null;
-    private areaBackbase2: PixMap | null = null;
-    private areaBackhmid1: PixMap | null = null;
-    private areaBackleft1: PixMap | null = null;
-    private areaBackleft2: PixMap | null = null;
-    private areaBackright1: PixMap | null = null;
-    private areaBackright2: PixMap | null = null;
-    private areaBacktop1: PixMap | null = null;
-    private areaBacktop2: PixMap | null = null;
-    private areaBackvmid1: PixMap | null = null;
-    private areaBackvmid2: PixMap | null = null;
-    private areaBackvmid3: PixMap | null = null;
-    private areaBackhmid2: PixMap | null = null;
-    private areaChatbackOffsets: Int32Array | null = null;
-    private areaSidebarOffsets: Int32Array | null = null;
-    private areaViewportOffsets: Int32Array | null = null;
+    areaSidebar: PixMap | null = null;
+    areaMapback: PixMap | null = null;
+    areaViewport: PixMap | null = null;
+    areaChatback: PixMap | null = null;
+    areaBackbase1: PixMap | null = null;
+    areaBackbase2: PixMap | null = null;
+    areaBackhmid1: PixMap | null = null;
+    areaBackleft1: PixMap | null = null;
+    areaBackleft2: PixMap | null = null;
+    areaBackright1: PixMap | null = null;
+    areaBackright2: PixMap | null = null;
+    areaBacktop1: PixMap | null = null;
+    areaBacktop2: PixMap | null = null;
+    areaBackvmid1: PixMap | null = null;
+    areaBackvmid2: PixMap | null = null;
+    areaBackvmid3: PixMap | null = null;
+    areaBackhmid2: PixMap | null = null;
+    areaChatbackOffsets: Int32Array | null = null;
+    areaSidebarOffsets: Int32Array | null = null;
+    areaViewportOffsets: Int32Array | null = null;
 
-    private imageInvback: Pix8 | null = null;
-    private imageChatback: Pix8 | null = null;
-    private imageBackbase1: Pix8 | null = null;
-    private imageBackbase2: Pix8 | null = null;
-    private imageBackhmid1: Pix8 | null = null;
-    private imageSideicons: (Pix8 | null)[] = new TypedArray1d(13, null);
-    private imageMinimap: Pix24 | null = null;
-    private imageRedstone1: Pix8 | null = null;
-    private imageRedstone2: Pix8 | null = null;
-    private imageRedstone3: Pix8 | null = null;
-    private imageRedstone1h: Pix8 | null = null;
-    private imageRedstone2h: Pix8 | null = null;
-    private imageRedstone1v: Pix8 | null = null;
-    private imageRedstone2v: Pix8 | null = null;
-    private imageRedstone3v: Pix8 | null = null;
-    private imageRedstone1hv: Pix8 | null = null;
-    private imageRedstone2hv: Pix8 | null = null;
+    imageInvback: Pix8 | null = null;
+    imageChatback: Pix8 | null = null;
+    imageBackbase1: Pix8 | null = null;
+    imageBackbase2: Pix8 | null = null;
+    imageBackhmid1: Pix8 | null = null;
+    imageSideicons: (Pix8 | null)[] = new TypedArray1d(13, null);
+    imageMinimap: Pix24 | null = null;
+    imageRedstone1: Pix8 | null = null;
+    imageRedstone2: Pix8 | null = null;
+    imageRedstone3: Pix8 | null = null;
+    imageRedstone1h: Pix8 | null = null;
+    imageRedstone2h: Pix8 | null = null;
+    imageRedstone1v: Pix8 | null = null;
+    imageRedstone2v: Pix8 | null = null;
+    imageRedstone3v: Pix8 | null = null;
+    imageRedstone1hv: Pix8 | null = null;
+    imageRedstone2hv: Pix8 | null = null;
 
-    private genderButtonImage0: Pix24 | null = null;
-    private genderButtonImage1: Pix24 | null = null;
+    genderButtonImage0: Pix24 | null = null;
+    genderButtonImage1: Pix24 | null = null;
 
-    private redrawSidebar: boolean = false;
-    private redrawChatback: boolean = false;
-    private redrawSideicons: boolean = false;
-    private redrawPrivacySettings: boolean = false;
-    private viewportInterfaceId: number = -1;
-    private dragCycles: number = 0;
-    private menuArea: number = 0;
-    private menuX: number = 0;
-    private menuY: number = 0;
-    private menuWidth: number = 0;
-    private menuHeight: number = 0;
-    private menuOption: string[] = [];
-    private sidebarInterfaceId: number = -1;
-    private chatInterfaceId: number = -1;
-    private chatInterface: Component = new Component();
-    private chatScrollHeight: number = 78;
-    private chatScrollOffset: number = 0;
-    private ignoreCount: number = 0;
-    private ignoreName37: bigint[] = [];
-    private modalMessage: string | null = null;
-    private flashingTab: number = -1;
-    private selectedTab: number = 3;
-    private tabInterfaceId: number[] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
-    private scrollGrabbed: boolean = false;
-    private scrollInputPadding: number = 0;
-    private showSocialInput: boolean = false;
-    private socialMessage: string = '';
-    private socialInput: string = '';
-    private socialAction: number = 0;
-    private chatbackInput: string = '';
-    private chatbackInputOpen: boolean = false;
-    private stickyChatInterfaceId: number = -1;
-    private privateMessageCount: number = 0;
-    private messageTextIds: Int32Array = new Int32Array(100);
-    private splitPrivateChat: number = 0;
-    private chatTyped: string = '';
-    private viewportHoveredInterfaceIndex: number = 0;
-    private sidebarHoveredInterfaceIndex: number = 0;
-    private chatHoveredInterfaceIndex: number = 0;
-    private objDragInterfaceId: number = 0;
-    private objDragCycles: number = 0;
-    private objSelected: number = 0;
-    private objSelectedSlot: number = 0;
-    private objSelectedInterface: number = 0;
-    private objInterface: number = 0;
-    private objSelectedName: string | null = null;
-    private selectedArea: number = 0;
-    private selectedItem: number = 0;
-    private selectedInterface: number = 0;
-    private selectedCycle: number = 0;
-    private pressedContinueOption: boolean = false;
-    private varps: number[] = [];
-    private varCache: number[] = [];
-    private spellSelected: number = 0;
-    private activeSpellId: number = 0;
-    private activeSpellFlags: number = 0;
-    private spellCaption: string | null = null;
-    private hoveredSlotParentId: number = 0;
-    private hoveredSlot: number = 0;
-    private lastHoveredInterfaceId: number = 0;
-    private reportAbuseInput: string = '';
-    private reportAbuseMuteOption: boolean = false;
-    private reportAbuseInterfaceID: number = -1;
-    private lastAddress: number = 0;
-    private daysSinceLastLogin: number = 0;
-    private daysSinceRecoveriesChanged: number = 0;
-    private unreadMessages: number = 0;
+    redrawSidebar: boolean = false;
+    redrawChatback: boolean = false;
+    redrawSideicons: boolean = false;
+    redrawPrivacySettings: boolean = false;
+    viewportInterfaceId: number = -1;
+    dragCycles: number = 0;
+    menuArea: number = 0;
+    menuX: number = 0;
+    menuY: number = 0;
+    menuWidth: number = 0;
+    menuHeight: number = 0;
+    menuOption: string[] = [];
+    sidebarInterfaceId: number = -1;
+    chatInterfaceId: number = -1;
+    chatInterface: Component = new Component();
+    chatScrollHeight: number = 78;
+    chatScrollOffset: number = 0;
+    ignoreCount: number = 0;
+    ignoreName37: bigint[] = [];
+    modalMessage: string | null = null;
+    flashingTab: number = -1;
+    selectedTab: number = 3;
+    tabInterfaceId: number[] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
+    scrollGrabbed: boolean = false;
+    scrollInputPadding: number = 0;
+    showSocialInput: boolean = false;
+    socialMessage: string = '';
+    socialInput: string = '';
+    socialAction: number = 0;
+    chatbackInput: string = '';
+    chatbackInputOpen: boolean = false;
+    stickyChatInterfaceId: number = -1;
+    privateMessageCount: number = 0;
+    messageTextIds: Int32Array = new Int32Array(100);
+    splitPrivateChat: number = 0;
+    chatTyped: string = '';
+    viewportHoveredInterfaceIndex: number = 0;
+    sidebarHoveredInterfaceIndex: number = 0;
+    chatHoveredInterfaceIndex: number = 0;
+    objDragInterfaceId: number = 0;
+    objDragCycles: number = 0;
+    objSelected: number = 0;
+    objSelectedSlot: number = 0;
+    objSelectedInterface: number = 0;
+    objInterface: number = 0;
+    objSelectedName: string | null = null;
+    selectedArea: number = 0;
+    selectedItem: number = 0;
+    selectedInterface: number = 0;
+    selectedCycle: number = 0;
+    pressedContinueOption: boolean = false;
+    varps: number[] = [];
+    varCache: number[] = [];
+    spellSelected: number = 0;
+    activeSpellId: number = 0;
+    activeSpellFlags: number = 0;
+    spellCaption: string | null = null;
+    hoveredSlotParentId: number = 0;
+    hoveredSlot: number = 0;
+    lastHoveredInterfaceId: number = 0;
+    reportAbuseInput: string = '';
+    reportAbuseMuteOption: boolean = false;
+    reportAbuseInterfaceID: number = -1;
+    lastAddress: number = 0;
+    daysSinceLastLogin: number = 0;
+    daysSinceRecoveriesChanged: number = 0;
+    unreadMessages: number = 0;
 
     // scene
-    private sceneState: number = 0;
-    private sceneCenterZoneX: number = 0;
-    private sceneCenterZoneZ: number = 0;
-    private sceneMapLandData: (Uint8Array | null)[] | null = null;
-    private sceneMapLandReady: boolean[] | null = null;
-    private sceneMapIndex: Int32Array | null = null;
-    private sceneAwaitingSync: boolean = false;
-    private scenePrevBaseTileX: number = 0;
-    private scenePrevBaseTileZ: number = 0;
-    private textureBuffer: Int8Array = new Int8Array(16384);
-    private currentLevel: number = 0;
-    private cameraMovedWrite: number = 0;
-    private cutsceneDstLocalTileX: number = 0;
-    private cutsceneDstLocalTileZ: number = 0;
-    private cutsceneDstHeight: number = 0;
-    private cutsceneRotateSpeed: number = 0;
-    private cutsceneRotateAcceleration: number = 0;
-    private cutsceneSrcLocalTileX: number = 0;
-    private cutsceneSrcLocalTileZ: number = 0;
-    private cutsceneSrcHeight: number = 0;
-    private cutsceneMoveSpeed: number = 0;
-    private cutsceneMoveAcceleration: number = 0;
+    sceneState: number = 0;
+    sceneCenterZoneX: number = 0;
+    sceneCenterZoneZ: number = 0;
+    sceneMapLandData: (Uint8Array | null)[] | null = null;
+    sceneMapLandReady: boolean[] | null = null;
+    sceneMapIndex: Int32Array | null = null;
+    sceneAwaitingSync: boolean = false;
+    scenePrevBaseTileX: number = 0;
+    scenePrevBaseTileZ: number = 0;
+    textureBuffer: Int8Array = new Int8Array(16384);
+    currentLevel: number = 0;
+    cameraMovedWrite: number = 0;
+    cutsceneDstLocalTileX: number = 0;
+    cutsceneDstLocalTileZ: number = 0;
+    cutsceneDstHeight: number = 0;
+    cutsceneRotateSpeed: number = 0;
+    cutsceneRotateAcceleration: number = 0;
+    cutsceneSrcLocalTileX: number = 0;
+    cutsceneSrcLocalTileZ: number = 0;
+    cutsceneSrcHeight: number = 0;
+    cutsceneMoveSpeed: number = 0;
+    cutsceneMoveAcceleration: number = 0;
 
     // bfs pathfinder
-    private bfsStepX: Int32Array = new Int32Array(4000);
-    private bfsStepZ: Int32Array = new Int32Array(4000);
-    private bfsDirection: Int32Array = new Int32Array(CollisionConstants.SIZE * CollisionConstants.SIZE);
-    private bfsCost: Int32Array = new Int32Array(CollisionConstants.SIZE * CollisionConstants.SIZE);
+    bfsStepX: Int32Array = new Int32Array(4000);
+    bfsStepZ: Int32Array = new Int32Array(4000);
+    bfsDirection: Int32Array = new Int32Array(CollisionConstants.SIZE * CollisionConstants.SIZE);
+    bfsCost: Int32Array = new Int32Array(CollisionConstants.SIZE * CollisionConstants.SIZE);
 
     // player
-    private localPlayer: PlayerEntity | null = null;
-    private inMultizone: number = 0;
-    private localPid: number = -1;
-    private heartbeatTimer: number = 0;
-    private wildernessLevel: number = 0;
-    private worldLocationState: number = 0;
-    private designGenderMale: boolean = true;
-    private updateDesignModel: boolean = false;
-    private designIdentikits: Int32Array = new Int32Array(7);
-    private designColors: Int32Array = new Int32Array(5);
+    localPlayer: PlayerEntity | null = null;
+    inMultizone: number = 0;
+    localPid: number = -1;
+    heartbeatTimer: number = 0;
+    wildernessLevel: number = 0;
+    worldLocationState: number = 0;
+    designGenderMale: boolean = true;
+    updateDesignModel: boolean = false;
+    designIdentikits: Int32Array = new Int32Array(7);
+    designColors: Int32Array = new Int32Array(5);
 
     // friends/chats
     static readonly CHAT_COLORS = Int32Array.of(Colors.YELLOW, Colors.RED, Colors.GREEN, Colors.CYAN, Colors.MAGENTA, Colors.WHITE);
-    private friendCount: number = 0;
-    private chatCount: number = 0;
-    private chatX: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatY: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatHeight: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatWidth: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatColors: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatStyles: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chatTimers: Int32Array = new Int32Array(Constants.MAX_CHATS);
-    private chats: (string | null)[] = new TypedArray1d(Constants.MAX_CHATS, null);
-    private friendName: (string | null)[] = new TypedArray1d(100, null);
-    private friendName37: BigInt64Array = new BigInt64Array(100);
-    private friendWorld: Int32Array = new Int32Array(100);
-    private socialName37: bigint | null = null;
+    friendCount: number = 0;
+    chatCount: number = 0;
+    chatX: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatY: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatHeight: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatWidth: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatColors: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatStyles: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chatTimers: Int32Array = new Int32Array(Constants.MAX_CHATS);
+    chats: (string | null)[] = new TypedArray1d(Constants.MAX_CHATS, null);
+    friendName: (string | null)[] = new TypedArray1d(100, null);
+    friendName37: BigInt64Array = new BigInt64Array(100);
+    friendWorld: Int32Array = new Int32Array(100);
+    socialName37: bigint | null = null;
 
     // audio
-    private waveEnabled: boolean = true;
-    private waveIds: Int32Array = new Int32Array(50);
-    private waveLoops: Int32Array = new Int32Array(50);
-    private waveVolume: number = 64;
-    private lastWaveId: number = -1;
-    private lastWaveLoops: number = -1;
-    private lastWaveLength: number = 0;
-    private lastWaveStartTime: number = 0;
-    private nextMusicDelay: number = 0;
-    private midiActive: boolean = true;
-    private currentMidi: string | null = null;
-    private midiCrc: number = 0;
-    private midiSize: number = 0;
-    private midiVolume: number = 64;
+    waveEnabled: boolean = true;
+    waveIds: Int32Array = new Int32Array(50);
+    waveLoops: Int32Array = new Int32Array(50);
+    waveVolume: number = 64;
+    lastWaveId: number = -1;
+    lastWaveLoops: number = -1;
+    lastWaveLength: number = 0;
+    lastWaveStartTime: number = 0;
+    nextMusicDelay: number = 0;
+    midiActive: boolean = true;
+    currentMidi: string | null = null;
+    midiCrc: number = 0;
+    midiSize: number = 0;
+    midiVolume: number = 64;
 
-    private displayFps: boolean = false;
+    displayFps: boolean = false;
+
+    bot: Bot;
 
     // ----
 
@@ -548,6 +551,7 @@ export class Client extends GameShell {
         }
 
         this.run();
+        this.bot = new Bot(this);
     }
 
     static setHighMemory(): void {
@@ -564,7 +568,7 @@ export class Client extends GameShell {
         World.lowMemory = true;
     }
 
-    private async setMidi(name: string, crc: number, length: number, fade: boolean): Promise<void> {
+    async setMidi(name: string, crc: number, length: number, fade: boolean): Promise<void> {
         try {
             let data: Uint8Array | undefined = await this.db?.cacheload(name + '.mid');
             if (data && crc !== 12345678 && Packet.crc32(data) !== crc) {
@@ -974,7 +978,7 @@ export class Client extends GameShell {
         await sleep(5); // return a slice of time to the main loop so it can update the progress bar
     }
 
-    private drawError(): void {
+    drawError(): void {
         canvas2d.fillStyle = 'black';
         canvas2d.fillRect(0, 0, this.width, this.height);
 
@@ -1039,7 +1043,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async loadArchive(filename: string, displayName: string, crc: number, progress: number): Promise<Jagfile> {
+    async loadArchive(filename: string, displayName: string, crc: number, progress: number): Promise<Jagfile> {
         let retry: number = 5;
         let data: Uint8Array | undefined = await this.db?.cacheload(filename);
         if (data && Packet.crc32(data) !== crc) {
@@ -1071,7 +1075,7 @@ export class Client extends GameShell {
         return new Jagfile(data);
     }
 
-    private async updateTitleScreen(): Promise<void> {
+    async updateTitleScreen(): Promise<void> {
         if (this.titleScreenState === 0) {
             let x: number = ((this.width / 2) | 0) - 80;
             let y: number = ((this.height / 2) | 0) + 20;
@@ -1179,7 +1183,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async tryLogin(username: string, password: string, reconnect: boolean): Promise<void> {
+    async tryLogin(username: string, password: string, reconnect: boolean): Promise<void> {
         try {
             if (!reconnect) {
                 this.loginMessage0 = '';
@@ -1419,7 +1423,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async logout(): Promise<void> {
+    async logout(): Promise<void> {
         if (this.netStream) {
             this.netStream.close();
         }
@@ -1443,7 +1447,7 @@ export class Client extends GameShell {
         this.nextMusicDelay = 0;
     }
 
-    private clearCaches(): void {
+    clearCaches(): void {
         LocType.modelCacheStatic?.clear();
         LocType.modelCacheDynamic?.clear();
         NpcType.modelCache?.clear();
@@ -1453,7 +1457,7 @@ export class Client extends GameShell {
         SpotAnimType.modelCache?.clear();
     }
 
-    private prepareGameScreen(): void {
+    prepareGameScreen(): void {
         if (!this.areaChatback) {
             this.unloadTitle();
             this.drawArea = null;
@@ -1480,7 +1484,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async updateGame(): Promise<void> {
+    async updateGame(): Promise<void> {
         if (this.players === null) {
             // client is unloading asynchronously
             return;
@@ -1802,7 +1806,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async tryReconnect() {
+    async tryReconnect() {
         if (this.idleTimeout > 0) {
             await this.logout();
         } else {
@@ -1824,7 +1828,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateSceneState(): void {
+    updateSceneState(): void {
         if (Client.lowMemory && this.sceneState === 2 && World.levelBuilt !== this.currentLevel) {
             this.areaViewport?.bind();
             this.fontPlain12?.drawStringCenter(257, 151, 'Loading - please wait.', Colors.BLACK);
@@ -1843,7 +1847,7 @@ export class Client extends GameShell {
         }
     }
 
-    private checkScene(): number {
+    checkScene(): number {
         if (!this.sceneMapLandData || !this.sceneMapLandReady || !this.sceneMapLocData || !this.sceneMapLocReady) {
             return -1000;
         }
@@ -1868,7 +1872,7 @@ export class Client extends GameShell {
         return 0;
     }
 
-    private buildScene(): void {
+    buildScene(): void {
 		try {
             this.minimapLevel = -1;
             this.locList.clear();
@@ -1968,7 +1972,7 @@ export class Client extends GameShell {
         Pix3D.initPool(20);
     }
 
-    private clearAddedLocs(): void {
+    clearAddedLocs(): void {
         for (let loc: LocAdd | null = this.addedLocs.head() as LocAdd | null; loc; loc = this.addedLocs.next() as LocAdd | null) {
             if (loc.duration === -1) {
                 loc.delay = 0;
@@ -1979,7 +1983,7 @@ export class Client extends GameShell {
         }
     }
 
-    private createMinimap(level: number): void {
+    createMinimap(level: number): void {
         if (!this.imageMinimap) {
             return;
         }
@@ -2079,7 +2083,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateAddedLocs(): void {
+    updateAddedLocs(): void {
         if (this.sceneState !== 2) {
             return;
         }
@@ -2117,7 +2121,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleInput(): void {
+    handleInput(): void {
         if (this.objDragArea === 0) {
             this.menuOption[0] = 'Cancel';
             this.menuAction[0] = 1252;
@@ -2203,7 +2207,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handlePrivateChatInput(mouseY: number): void {
+    handlePrivateChatInput(mouseY: number): void {
         if (this.splitPrivateChat === 0) {
             return;
         }
@@ -2248,7 +2252,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleChatMouseInput(_mouseX: number, mouseY: number): void {
+    handleChatMouseInput(_mouseX: number, mouseY: number): void {
         let line: number = 0;
         for (let i: number = 0; i < 100; i++) {
             if (!this.messageText[i]) {
@@ -2329,7 +2333,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleViewportOptions(): void {
+    handleViewportOptions(): void {
         if (this.objSelected === 0 && this.spellSelected === 0) {
             this.menuOption[this.menuSize] = 'Walk here';
             this.menuAction[this.menuSize] = 660;
@@ -2532,7 +2536,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async handleMouseInput(): Promise<void> {
+    async handleMouseInput(): Promise<void> {
         if (this.objDragArea !== 0) {
             return;
         }
@@ -2694,7 +2698,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleTabInput(): void {
+    handleTabInput(): void {
         if (this.mouseClickButton === 1) {
             if (this.mouseClickX >= 549 && this.mouseClickX <= 583 && this.mouseClickY >= 195 && this.mouseClickY < 231 && this.tabInterfaceId[0] !== -1) {
                 this.redrawSidebar = true;
@@ -2763,7 +2767,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleChatSettingsInput(): void {
+    handleChatSettingsInput(): void {
         if (this.mouseClickButton === 1) {
             if (this.mouseClickX >= 8 && this.mouseClickX <= 108 && this.mouseClickY >= 490 && this.mouseClickY <= 522) {
                 this.publicChatSetting = (this.publicChatSetting + 1) % 4;
@@ -2808,7 +2812,7 @@ export class Client extends GameShell {
         }
     }
 
-    private closeInterfaces(): void {
+    closeInterfaces(): void {
         this.out.p1isaac(ClientProt.CLOSE_MODAL);
 
         if (this.sidebarInterfaceId !== -1) {
@@ -2827,7 +2831,7 @@ export class Client extends GameShell {
         this.viewportInterfaceId = -1;
     }
 
-    private updateEntityChats(): void {
+    updateEntityChats(): void {
         for (let i: number = -1; i < this.playerCount; i++) {
             let index: number;
             if (i === -1) {
@@ -2860,7 +2864,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateOrbitCamera(): void {
+    updateOrbitCamera(): void {
         if (!this.localPlayer) {
             return; // custom
         }
@@ -2938,7 +2942,7 @@ export class Client extends GameShell {
         }
     }
 
-    private applyCutscene(): void {
+    applyCutscene(): void {
         let x: number = this.cutsceneSrcLocalTileX * 128 + 64;
         let z: number = this.cutsceneSrcLocalTileZ * 128 + 64;
         let y: number = this.getHeightmapY(this.currentLevel, this.cutsceneSrcLocalTileX, this.cutsceneSrcLocalTileZ) - this.cutsceneSrcHeight;
@@ -3052,7 +3056,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async handleInputKey(): Promise<void> {
+    async handleInputKey(): Promise<void> {
         // eslint-disable-next-line no-constant-condition
         while (true) {
             let key: number;
@@ -3280,7 +3284,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updatePlayers(): void {
+    updatePlayers(): void {
         for (let i: number = -1; i < this.playerCount; i++) {
             let index: number;
             if (i === -1) {
@@ -3322,7 +3326,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateNpcs(): void {
+    updateNpcs(): void {
         for (let i: number = 0; i < this.npcCount; i++) {
             const id: number = this.npcIds[i];
             const npc: NpcEntity | null = this.npcs[id];
@@ -3332,7 +3336,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateEntity(entity: PathingEntity): void {
+    updateEntity(entity: PathingEntity): void {
         if (entity.x < 128 || entity.z < 128 || entity.x >= 13184 || entity.z >= 13184) {
             entity.primarySeqId = -1;
             entity.spotanimId = -1;
@@ -3365,7 +3369,7 @@ export class Client extends GameShell {
         this.updateSequences(entity);
     }
 
-    private updateForceMovement(entity: PathingEntity): void {
+    updateForceMovement(entity: PathingEntity): void {
         const delta: number = entity.forceMoveEndCycle - this.loopCycle;
         const dstX: number = entity.forceMoveStartSceneTileX * 128 + entity.size * 64;
         const dstZ: number = entity.forceMoveStartSceneTileZ * 128 + entity.size * 64;
@@ -3392,7 +3396,7 @@ export class Client extends GameShell {
         }
     }
 
-    private startForceMovement(entity: PathingEntity): void {
+    startForceMovement(entity: PathingEntity): void {
         if (entity.forceMoveStartCycle === this.loopCycle || entity.primarySeqId === -1 || entity.primarySeqDelay !== 0 || entity.primarySeqCycle + 1 > SeqType.instances[entity.primarySeqId].seqDelay![entity.primarySeqFrame]) {
             const duration: number = entity.forceMoveStartCycle - entity.forceMoveEndCycle;
             const delta: number = this.loopCycle - entity.forceMoveEndCycle;
@@ -3425,7 +3429,7 @@ export class Client extends GameShell {
         entity.yaw = entity.dstYaw;
     }
 
-    private updateMovement(entity: PathingEntity): void {
+    updateMovement(entity: PathingEntity): void {
         entity.secondarySeqId = entity.seqStandId;
 
         if (entity.routeLength === 0) {
@@ -3546,7 +3550,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateFacingDirection(e: PathingEntity): void {
+    updateFacingDirection(e: PathingEntity): void {
         if (e.targetId !== -1 && e.targetId < 32768) {
             const npc: NpcEntity | null = this.npcs[e.targetId];
             if (npc) {
@@ -3612,7 +3616,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateSequences(e: PathingEntity): void {
+    updateSequences(e: PathingEntity): void {
         e.seqStretches = false;
 
         let seq: SeqType | null;
@@ -3675,7 +3679,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async loadTitle(): Promise<void> {
+    async loadTitle(): Promise<void> {
         if (!this.imageTitle2) {
             this.drawArea = null;
             this.areaChatback = null;
@@ -3721,7 +3725,7 @@ export class Client extends GameShell {
         }
     }
 
-    private async loadTitleBackground(): Promise<void> {
+    async loadTitleBackground(): Promise<void> {
         if (!this.titleArchive) {
             return;
         }
@@ -3789,7 +3793,7 @@ export class Client extends GameShell {
         logo.draw(((this.width / 2) | 0) - ((logo.width2d / 2) | 0) - 128, 18);
     }
 
-    private loadTitleImages(): void {
+    loadTitleImages(): void {
         if (!this.titleArchive) {
             return;
         }
@@ -3859,7 +3863,7 @@ export class Client extends GameShell {
         });
     }
 
-    private async drawTitleScreen(): Promise<void> {
+    async drawTitleScreen(): Promise<void> {
         await this.loadTitle();
         this.imageTitle4?.bind();
         this.imageTitlebox?.draw(0, 0);
@@ -3940,7 +3944,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawGame(): void {
+    drawGame(): void {
         if (this.players === null) {
             // client is unloading asynchronously
             return;
@@ -4185,7 +4189,7 @@ export class Client extends GameShell {
                 this.fontPlain12?.drawStringTaggableCenter(57, 46, 'Hide', Colors.CYAN, true);
             }
 
-            this.fontPlain12?.drawStringTaggableCenter(186, 33, 'Private chat', Colors.WHITE, true);
+            this.fontPlain12?.drawStringTaggableCenter(186, 33, 'chat', Colors.WHITE, true);
             if (this.privateChatSetting === 0) {
                 this.fontPlain12?.drawStringTaggableCenter(186, 46, 'On', Colors.GREEN, true);
             }
@@ -4215,7 +4219,7 @@ export class Client extends GameShell {
         this.sceneDelta = 0;
     }
 
-    private drawScene(): void {
+    drawScene(): void {
         this.sceneCycle++;
         this.pushPlayers();
         this.pushNpcs();
@@ -4324,7 +4328,7 @@ export class Client extends GameShell {
         this.cameraYaw = cameraYaw;
     }
 
-    private pushPlayers(): void {
+    pushPlayers(): void {
         if (!this.localPlayer) {
             return;
         }
@@ -4375,7 +4379,7 @@ export class Client extends GameShell {
         }
     }
 
-    private pushNpcs(): void {
+    pushNpcs(): void {
         for (let i: number = 0; i < this.npcCount; i++) {
             const npc: NpcEntity | null = this.npcs[this.npcIds[i]];
             const typecode: number = ((this.npcIds[i] << 14) + 0x1fff_ffff + 1) | 0;
@@ -4403,7 +4407,7 @@ export class Client extends GameShell {
         }
     }
 
-    private pushProjectiles(): void {
+    pushProjectiles(): void {
         for (let proj: ProjectileEntity | null = this.projectiles.head() as ProjectileEntity | null; proj; proj = this.projectiles.next() as ProjectileEntity | null) {
             if (proj.projLevel !== this.currentLevel || this.loopCycle > proj.lastCycle) {
                 proj.unlink();
@@ -4434,7 +4438,7 @@ export class Client extends GameShell {
         }
     }
 
-    private pushSpotanims(): void {
+    pushSpotanims(): void {
         for (let entity: SpotAnimEntity | null = this.spotanims.head() as SpotAnimEntity | null; entity; entity = this.spotanims.next() as SpotAnimEntity | null) {
             if (entity.spotLevel !== this.currentLevel || entity.seqComplete) {
                 entity.unlink();
@@ -4449,7 +4453,7 @@ export class Client extends GameShell {
         }
     }
 
-    private pushLocs(): void {
+    pushLocs(): void {
         for (let loc: LocEntity | null = this.locList.head() as LocEntity | null; loc; loc = this.locList.next() as LocEntity | null) {
             let append: boolean = false;
             loc.seqCycle += this.sceneDelta;
@@ -4546,7 +4550,7 @@ export class Client extends GameShell {
         }
     }
 
-    private orbitCamera(targetX: number, targetY: number, targetZ: number, yaw: number, pitch: number, distance: number): void {
+    orbitCamera(targetX: number, targetY: number, targetZ: number, yaw: number, pitch: number, distance: number): void {
         const invPitch: number = (2048 - pitch) & 0x7ff;
         const invYaw: number = (2048 - yaw) & 0x7ff;
         let x: number = 0;
@@ -4579,7 +4583,7 @@ export class Client extends GameShell {
         this.cameraYaw = yaw;
     }
 
-    private getTopLevelCutscene(): number {
+    getTopLevelCutscene(): number {
         if (!this.levelTileFlags) {
             return 0; // custom
         }
@@ -4587,7 +4591,7 @@ export class Client extends GameShell {
         return y - this.cameraY >= 800 || (this.levelTileFlags[this.currentLevel][this.cameraX >> 7][this.cameraZ >> 7] & 0x4) === 0 ? 3 : this.currentLevel;
     }
 
-    private getTopLevel(): number {
+    getTopLevel(): number {
         let top: number = 3;
         if (this.cameraPitch < 310 && this.localPlayer) {
             let cameraLocalTileX: number = this.cameraX >> 7;
@@ -4669,7 +4673,7 @@ export class Client extends GameShell {
         return top;
     }
 
-    private draw2DEntityElements(): void {
+    draw2DEntityElements(): void {
         this.chatCount = 0;
 
         for (let index: number = -1; index < this.playerCount + this.npcCount; index++) {
@@ -4852,7 +4856,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawTileHint(): void {
+    drawTileHint(): void {
         if (this.hintType !== 2 || !this.imageHeadicons[2]) {
             return;
         }
@@ -4864,11 +4868,11 @@ export class Client extends GameShell {
         }
     }
 
-    private projectFromEntity(entity: PathingEntity, height: number): void {
+    projectFromEntity(entity: PathingEntity, height: number): void {
         this.projectFromGround(entity.x, height, entity.z);
     }
 
-    private projectFromGround(x: number, height: number, z: number): void {
+    projectFromGround(x: number, height: number, z: number): void {
         if (x < 128 || z < 128 || x > 13056 || z > 13056) {
             this.projectX = -1;
             this.projectY = -1;
@@ -4879,7 +4883,7 @@ export class Client extends GameShell {
         this.project(x, y, z);
     }
 
-    private project(x: number, y: number, z: number): void {
+    project(x: number, y: number, z: number): void {
         let dx: number = x - this.cameraX;
         let dy: number = y - this.cameraY;
         let dz: number = z - this.cameraZ;
@@ -4906,7 +4910,7 @@ export class Client extends GameShell {
         }
     }
 
-    private getHeightmapY(level: number, sceneX: number, sceneZ: number): number {
+    getHeightmapY(level: number, sceneX: number, sceneZ: number): number {
         if (!this.levelHeightmap) {
             return 0; // custom
         }
@@ -4924,7 +4928,7 @@ export class Client extends GameShell {
         return (y00 * (128 - tileLocalZ) + y11 * tileLocalZ) >> 7;
     }
 
-    private updateTextures(cycle: number): void {
+    updateTextures(cycle: number): void {
         if (!Client.lowMemory) {
             if (Pix3D.textureCycle[17] >= cycle) {
                 const texture: Pix8 | null = Pix3D.textures[17];
@@ -4966,7 +4970,7 @@ export class Client extends GameShell {
         }
     }
 
-    private draw3DEntityElements(): void {
+    draw3DEntityElements(): void {
         this.drawPrivateMessages();
         if (this.crossMode === 1) {
             this.imageCrosses[(this.crossCycle / 100) | 0]?.draw(this.crossX - 8 - 8, this.crossY - 8 - 11);
@@ -5044,7 +5048,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawPrivateMessages(): void {
+    drawPrivateMessages(): void {
         if (this.splitPrivateChat === 0) {
             return;
         }
@@ -5097,7 +5101,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawWildyLevel(): void {
+    drawWildyLevel(): void {
         if (!this.localPlayer) {
             return;
         }
@@ -5149,7 +5153,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawTooltip(): void {
+    drawTooltip(): void {
         if (this.menuSize < 2 && this.objSelected === 0 && this.spellSelected === 0) {
             return;
         }
@@ -5170,7 +5174,7 @@ export class Client extends GameShell {
         this.fontBold12?.drawStringTooltip(4, 15, tooltip, Colors.WHITE, true, (this.loopCycle / 1000) | 0);
     }
 
-    private drawMenu(): void {
+    drawMenu(): void {
         const x: number = this.menuX;
         const y: number = this.menuY;
         const w: number = this.menuWidth;
@@ -5209,7 +5213,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawMinimapLoc(tileX: number, tileZ: number, level: number, wallRgb: number, doorRgb: number): void {
+    drawMinimapLoc(tileX: number, tileZ: number, level: number, wallRgb: number, doorRgb: number): void {
         if (!this.scene || !this.imageMinimap) {
             return;
         }
@@ -5351,7 +5355,7 @@ export class Client extends GameShell {
         }
     }
 
-    private interactWithLoc(opcode: number, x: number, z: number, typecode: number): boolean {
+    interactWithLoc(opcode: number, x: number, z: number, typecode: number): boolean {
         if (!this.localPlayer || !this.scene) {
             return false;
         }
@@ -5399,7 +5403,7 @@ export class Client extends GameShell {
         return true;
     }
 
-    private tryMove(srcX: number, srcZ: number, dx: number, dz: number, type: number, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, tryNearest: boolean): boolean {
+    tryMove(srcX: number, srcZ: number, dx: number, dz: number, type: number, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, tryNearest: boolean): boolean {
         const collisionMap: CollisionMap | null = this.levelCollisionMap[this.currentLevel];
         if (!collisionMap) {
             return false;
@@ -5661,7 +5665,7 @@ export class Client extends GameShell {
         return type !== 1;
     }
 
-    private async read(): Promise<boolean> {
+    async read(): Promise<boolean> {
         if (!this.netStream) {
             return false;
         }
@@ -6862,7 +6866,7 @@ export class Client extends GameShell {
         return true;
     }
 
-    private readZonePacket(buf: Packet, opcode: number): void {
+    readZonePacket(buf: Packet, opcode: number): void {
         const pos: number = buf.g1();
         let x: number = this.baseX + ((pos >> 4) & 0x7);
         let z: number = this.baseZ + (pos & 0x7);
@@ -7076,7 +7080,7 @@ export class Client extends GameShell {
         }
     }
 
-    private appendLoc(duration: number, type: number, rotation: number, layer: number, z: number, shape: number, level: number, x: number, delay: number): void {
+    appendLoc(duration: number, type: number, rotation: number, layer: number, z: number, shape: number, level: number, x: number, delay: number): void {
         let loc: LocAdd | null = null;
         for (let next: LocAdd | null = this.addedLocs.head() as LocAdd | null; next; next = this.addedLocs.next() as LocAdd | null) {
             if (next.plane === this.currentLevel && next.x === x && next.z === z && next.layer === layer) {
@@ -7102,7 +7106,7 @@ export class Client extends GameShell {
         loc.duration = duration;
     }
 
-    private storeLoc(loc: LocAdd): void {
+    storeLoc(loc: LocAdd): void {
         if (!this.scene) {
             return;
         }
@@ -7134,7 +7138,7 @@ export class Client extends GameShell {
         loc.lastAngle = otherAngle;
     }
 
-    private addLoc(level: number, x: number, z: number, id: number, angle: number, shape: number, layer: number): void {
+    addLoc(level: number, x: number, z: number, id: number, angle: number, shape: number, layer: number): void {
         if (x < 1 || z < 1 || x > 102 || z > 102) {
             return;
         }
@@ -7206,7 +7210,7 @@ export class Client extends GameShell {
         }
     }
 
-    private sortObjStacks(x: number, z: number): void {
+    sortObjStacks(x: number, z: number): void {
         const objStacks: LinkList | null = this.objStacks[this.currentLevel][x][z];
         if (!objStacks) {
             this.scene?.removeObjStack(this.currentLevel, x, z);
@@ -7267,7 +7271,7 @@ export class Client extends GameShell {
         this.scene?.addObjStack(x, z, this.getHeightmapY(this.currentLevel, x * 128 + 64, z * 128 + 64), this.currentLevel, typecode, type.getInterfaceModel(topObj.count), middleObj, bottomObj);
     }
 
-    private readPlayerInfo(buf: Packet, size: number): void {
+    readPlayerInfo(buf: Packet, size: number): void {
         this.entityRemovalCount = 0;
         this.entityUpdateCount = 0;
 
@@ -7299,7 +7303,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readLocalPlayer(buf: Packet): void {
+    readLocalPlayer(buf: Packet): void {
         buf.bits();
 
         const hasUpdate: number = buf.gBit(1);
@@ -7341,7 +7345,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readPlayers(buf: Packet): void {
+    readPlayers(buf: Packet): void {
         const count: number = buf.gBit(8);
 
         if (count < this.playerCount) {
@@ -7410,7 +7414,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readNewPlayers(buf: Packet, size: number): void {
+    readNewPlayers(buf: Packet, size: number): void {
         let index: number;
         while (buf.bitPos + 10 < size * 8) {
             index = buf.gBit(11);
@@ -7453,7 +7457,7 @@ export class Client extends GameShell {
         buf.bytes();
     }
 
-    private readPlayerUpdates(buf: Packet): void {
+    readPlayerUpdates(buf: Packet): void {
         for (let i: number = 0; i < this.entityUpdateCount; i++) {
             const index: number = this.entityUpdateIds[i];
             const player: PlayerEntity | null = this.players[index];
@@ -7468,7 +7472,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readPlayerUpdatesBlocks(player: PlayerEntity, index: number, mask: number, buf: Packet): void {
+    readPlayerUpdatesBlocks(player: PlayerEntity, index: number, mask: number, buf: Packet): void {
         player.lastMask = mask;
         player.lastMaskCycle = this.loopCycle;
 
@@ -7589,7 +7593,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readNpcInfo(buf: Packet, size: number): void {
+    readNpcInfo(buf: Packet, size: number): void {
         this.entityRemovalCount = 0;
         this.entityUpdateCount = 0;
 
@@ -7622,7 +7626,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readNpcs(buf: Packet): void {
+    readNpcs(buf: Packet): void {
         buf.bits();
 
         const count: number = buf.gBit(8);
@@ -7692,7 +7696,7 @@ export class Client extends GameShell {
         }
     }
 
-    private readNewNpcs(buf: Packet, size: number): void {
+    readNewNpcs(buf: Packet, size: number): void {
         while (buf.bitPos + 21 < size * 8) {
             const index: number = buf.gBit(13);
             if (index === 8191) {
@@ -7734,7 +7738,7 @@ export class Client extends GameShell {
         buf.bytes();
     }
 
-    private readNpcUpdates(buf: Packet): void {
+    readNpcUpdates(buf: Packet): void {
         for (let i: number = 0; i < this.entityUpdateCount; i++) {
             const id: number = this.entityUpdateIds[i];
             const npc: NpcEntity | null = this.npcs[id];
@@ -7811,7 +7815,7 @@ export class Client extends GameShell {
         }
     }
 
-    private showContextMenu(): void {
+    showContextMenu(): void {
         let width: number = 0;
         if (this.fontBold12) {
             width = this.fontBold12.stringWidth('Choose Option');
@@ -7903,7 +7907,7 @@ export class Client extends GameShell {
         }
     }
 
-    private isAddFriendOption(option: number): boolean {
+    isAddFriendOption(option: number): boolean {
         if (option < 0) {
             return false;
         }
@@ -7914,7 +7918,7 @@ export class Client extends GameShell {
         return action === 406;
     }
 
-    private async useMenuOption(optionId: number): Promise<void> {
+    async useMenuOption(optionId: number): Promise<void> {
         if (optionId < 0) {
             return;
         }
@@ -8522,7 +8526,7 @@ export class Client extends GameShell {
         this.spellSelected = 0;
     }
 
-    private addNpcOptions(npc: NpcType, a: number, b: number, c: number): void {
+    addNpcOptions(npc: NpcType, a: number, b: number, c: number): void {
         if (this.menuSize >= 400) {
             return;
         }
@@ -8616,7 +8620,7 @@ export class Client extends GameShell {
         }
     }
 
-    private addPlayerOptions(player: PlayerEntity, a: number, b: number, c: number): void {
+    addPlayerOptions(player: PlayerEntity, a: number, b: number, c: number): void {
         if (player === this.localPlayer || this.menuSize >= 400) {
             return;
         }
@@ -8696,7 +8700,7 @@ export class Client extends GameShell {
         }
     }
 
-    private getCombatLevelColorTag(viewerLevel: number, otherLevel: number): string {
+    getCombatLevelColorTag(viewerLevel: number, otherLevel: number): string {
         const diff: number = viewerLevel - otherLevel;
         if (diff < -9) {
             return '@red@';
@@ -8719,7 +8723,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawInterface(com: Component, x: number, y: number, scrollY: number, outline: boolean = false): void {
+    drawInterface(com: Component, x: number, y: number, scrollY: number, outline: boolean = false): void {
         if (com.comType !== 0 || !com.childId || (com.hide && this.viewportHoveredInterfaceIndex !== com.id && this.sidebarHoveredInterfaceIndex !== com.id && this.chatHoveredInterfaceIndex !== com.id)) {
             return;
         }
@@ -9010,7 +9014,7 @@ export class Client extends GameShell {
         Pix2D.setBounds(left, top, right, bottom);
     }
 
-    private drawScrollbar(x: number, y: number, scrollY: number, scrollHeight: number, height: number): void {
+    drawScrollbar(x: number, y: number, scrollY: number, scrollHeight: number, height: number): void {
         this.imageScrollbar0?.draw(x, y);
         this.imageScrollbar1?.draw(x, y + height - 16);
         Pix2D.fillRect2d(x, y + 16, 16, height - 32, Colors.SCROLLBAR_TRACK);
@@ -9036,7 +9040,7 @@ export class Client extends GameShell {
         Pix2D.drawHorizontalLine(x + 1, y + gripY + gripSize + 14, Colors.SCROLLBAR_GRIP_LOWLIGHT, 15);
     }
 
-    private formatObjCount(amount: number): string {
+    formatObjCount(amount: number): string {
         if (amount < 100000) {
             return String(amount);
         } else if (amount < 10000000) {
@@ -9046,7 +9050,7 @@ export class Client extends GameShell {
         }
     }
 
-    private formatObjCountTagged(amount: number): string {
+    formatObjCountTagged(amount: number): string {
         let s: string = String(amount);
         for (let i: number = s.length - 3; i > 0; i -= 3) {
             s = s.substring(0, i) + ',' + s.substring(i);
@@ -9059,7 +9063,7 @@ export class Client extends GameShell {
         return ' ' + s;
     }
 
-    private handleScrollInput(mouseX: number, mouseY: number, scrollableHeight: number, height: number, redraw: boolean, left: number, top: number, component: Component): void {
+    handleScrollInput(mouseX: number, mouseY: number, scrollableHeight: number, height: number, redraw: boolean, left: number, top: number, component: Component): void {
         if (this.scrollGrabbed) {
             this.scrollInputPadding = 32;
         } else {
@@ -9093,11 +9097,11 @@ export class Client extends GameShell {
         }
     }
 
-    private getIntString(value: number): string {
+    getIntString(value: number): string {
         return value < 999999999 ? String(value) : '*';
     }
 
-    private executeInterfaceScript(com: Component): boolean {
+    executeInterfaceScript(com: Component): boolean {
         if (!com.scriptComparator) {
             return false;
         }
@@ -9129,7 +9133,7 @@ export class Client extends GameShell {
         return true;
     }
 
-    private executeClientscript1(component: Component, scriptId: number): number {
+    executeClientscript1(component: Component, scriptId: number): number {
         if (!component.script || scriptId >= component.script.length) {
             return -2;
         }
@@ -9224,7 +9228,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleInterfaceInput(com: Component, mouseX: number, mouseY: number, x: number, y: number, scrollPosition: number): void {
+    handleInterfaceInput(com: Component, mouseX: number, mouseY: number, x: number, y: number, scrollPosition: number): void {
         if (com.comType !== 0 || !com.childId || com.hide || mouseX < x || mouseY < y || mouseX > x + com.width || mouseY > y + com.height || !com.childX || !com.childY) {
             return;
         }
@@ -9438,7 +9442,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleSocialMenuOption(component: Component): boolean {
+    handleSocialMenuOption(component: Component): boolean {
         let type: number = component.clientCode;
         if (type >= ClientCode.CC_FRIENDS_START && type <= ClientCode.CC_FRIENDS_UPDATE_END) {
             if (type >= ClientCode.CC_FRIENDS_UPDATE_START) {
@@ -9462,7 +9466,7 @@ export class Client extends GameShell {
         return false;
     }
 
-    private resetInterfaceAnimation(id: number): void {
+    resetInterfaceAnimation(id: number): void {
         const parent: Component = Component.instances[id];
         if (!parent.childId) {
             return;
@@ -9477,7 +9481,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateInterfaceAnimation(id: number, delta: number): boolean {
+    updateInterfaceAnimation(id: number, delta: number): boolean {
         let updated: boolean = false;
         const parent: Component = Component.instances[id];
         if (!parent.childId) {
@@ -9527,7 +9531,7 @@ export class Client extends GameShell {
         return updated;
     }
 
-    private async updateVarp(id: number): Promise<void> {
+    async updateVarp(id: number): Promise<void> {
         const clientcode: number = VarpType.instances[id].clientcode;
         if (clientcode !== 0) {
             const value: number = this.varps[id];
@@ -9619,7 +9623,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateInterfaceContent(component: Component): void {
+    updateInterfaceContent(component: Component): void {
         let clientCode: number = component.clientCode;
 
         if (clientCode >= ClientCode.CC_FRIENDS_START && clientCode <= ClientCode.CC_FRIENDS_END) {
@@ -9803,7 +9807,7 @@ export class Client extends GameShell {
         }
     }
 
-    private handleInterfaceAction(com: Component): boolean {
+    handleInterfaceAction(com: Component): boolean {
         const clientCode: number = com.clientCode;
         if (clientCode === ClientCode.CC_ADD_FRIEND) {
             this.redrawChatback = true;
@@ -9942,7 +9946,7 @@ export class Client extends GameShell {
         return false;
     }
 
-    private validateCharacterDesign(): void {
+    validateCharacterDesign(): void {
         this.updateDesignModel = true;
 
         for (let i: number = 0; i < 7; i++) {
@@ -9957,7 +9961,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawSidebar(): void {
+    drawSidebar(): void {
         this.areaSidebar?.bind();
         if (this.areaSidebarOffsets) {
             Pix3D.lineOffset = this.areaSidebarOffsets;
@@ -9978,7 +9982,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawChatback(): void {
+    drawChatback(): void {
         this.areaChatback?.bind();
         if (this.areaChatbackOffsets) {
             Pix3D.lineOffset = this.areaChatbackOffsets;
@@ -10081,7 +10085,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawMinimap(): void {
+    drawMinimap(): void {
         this.areaMapback?.bind();
         if (!this.localPlayer) {
             return;
@@ -10152,7 +10156,7 @@ export class Client extends GameShell {
         this.areaViewport?.bind();
     }
 
-    private drawOnMinimap(dy: number, image: Pix24 | null, dx: number): void {
+    drawOnMinimap(dy: number, image: Pix24 | null, dx: number): void {
         if (!image) {
             return;
         }
@@ -10179,7 +10183,7 @@ export class Client extends GameShell {
         }
     }
 
-    private addMessage(type: number, text: string, sender: string): void {
+    addMessage(type: number, text: string, sender: string): void {
         if (type === 0 && this.stickyChatInterfaceId !== -1) {
             this.modalMessage = text;
             this.mouseClickButton = 0;
@@ -10197,7 +10201,7 @@ export class Client extends GameShell {
         this.messageText[0] = text;
     }
 
-    private isFriend(username: string | null): boolean {
+    isFriend(username: string | null): boolean {
         if (!username) {
             return false;
         }
@@ -10215,7 +10219,7 @@ export class Client extends GameShell {
         return username.toLowerCase() === this.localPlayer.name?.toLowerCase();
     }
 
-    private addFriend(username: bigint): void {
+    addFriend(username: bigint): void {
         if (username === 0n) {
             return;
         }
@@ -10255,7 +10259,7 @@ export class Client extends GameShell {
         }
     }
 
-    private removeFriend(username: bigint): void {
+    removeFriend(username: bigint): void {
         if (username === 0n) {
             return;
         }
@@ -10276,7 +10280,7 @@ export class Client extends GameShell {
         }
     }
 
-    private addIgnore(username: bigint): void {
+    addIgnore(username: bigint): void {
         if (username === 0n) {
             return;
         }
@@ -10307,7 +10311,7 @@ export class Client extends GameShell {
         this.out.p8(username);
     }
 
-    private removeIgnore(username: bigint): void {
+    removeIgnore(username: bigint): void {
         if (username === 0n) {
             return;
         }
@@ -10326,7 +10330,7 @@ export class Client extends GameShell {
         }
     }
 
-    private unloadTitle(): void {
+    unloadTitle(): void {
         this.flameActive = false;
         if (this.flamesInterval) {
             clearInterval(this.flamesInterval);
@@ -10358,7 +10362,7 @@ export class Client extends GameShell {
         this.drawFlames();
     }
 
-    private updateFlames(): void {
+    updateFlames(): void {
         if (!this.flameBuffer3 || !this.flameBuffer2 || !this.flameBuffer0 || !this.flameLineOffset) {
             return;
         }
@@ -10426,7 +10430,7 @@ export class Client extends GameShell {
         }
     }
 
-    private updateFlameBuffer(image: Pix8 | null): void {
+    updateFlameBuffer(image: Pix8 | null): void {
         if (!this.flameBuffer0 || !this.flameBuffer1) {
             return;
         }
@@ -10473,7 +10477,7 @@ export class Client extends GameShell {
         }
     }
 
-    private drawFlames(): void {
+    drawFlames(): void {
         if (!this.flameGradient || !this.flameGradient0 || !this.flameGradient1 || !this.flameGradient2 || !this.flameLineOffset || !this.flameBuffer3) {
             return;
         }
@@ -10576,7 +10580,7 @@ export class Client extends GameShell {
         }
     }
 
-    private mix(src: number, alpha: number, dst: number): number {
+    mix(src: number, alpha: number, dst: number): number {
         const invAlpha: number = 256 - alpha;
         return ((((src & 0xff00ff) * invAlpha + (dst & 0xff00ff) * alpha) & 0xff00ff00) + (((src & 0xff00) * invAlpha + (dst & 0xff00) * alpha) & 0xff0000)) >> 8;
     }
