@@ -528,7 +528,7 @@ export class Client extends GameShell {
         }
     }
 
-    constructor(nodeid: number, lowmem: boolean, members: boolean) {
+    constructor(nodeid: number, lowmem: boolean, members: boolean, window: Window) {
         super();
 
         if (typeof nodeid === 'undefined' || typeof lowmem === 'undefined' || typeof members === 'undefined') {
@@ -551,7 +551,7 @@ export class Client extends GameShell {
         }
 
         this.run();
-        this.bot = new Bot(this);
+        this.bot = new Bot(this, window);
     }
 
     static setHighMemory(): void {

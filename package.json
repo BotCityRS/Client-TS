@@ -7,8 +7,8 @@
         "#/*": "./src/*"
     },
     "scripts": {
-        "build": "bun run bundle.ts",
-        "build:dev": "bun run bundle.ts dev"
+        "build": "bun run bundle.ts && cp -a ./out/* ../engine/public/client/",
+        "build:dev": "bun run bundle.ts dev && cp -a ./out/* ../engine/public/client/"
     },
     "devDependencies": {
         "@types/bun": "latest",

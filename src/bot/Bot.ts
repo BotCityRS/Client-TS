@@ -11,11 +11,8 @@ export default class Bot {
     isInCombatScore: number;
     timers: any;
 
-    constructor(client: Client) {
-        console.info("hi")
-        window?.onload(() => {
-            window.bot = this;
-        })
+    constructor(client: Client, window: Window) {
+        window.bot = this;
         this.client = client;
 
     
