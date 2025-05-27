@@ -24,6 +24,49 @@ export default class AutoKiller extends BotScript {
         this.buryBones = buryBones
     }
 
+    static htmlSetup(base: HTMLElement) {
+        const elemAttackStyle = document.createElement('input')
+        elemAttackStyle.id = 'elemAttackStyle'
+        elemAttackStyle.placeholder = 'Attack Style: 0 = atk, 1 = str, 2 = shared, 3 = def'
+        elemAttackStyle.value = '0'
+
+        const elemNPCIDs = document.createElement('input')
+        elemNPCIDs.id = 'elemNPCIDs'
+        elemNPCIDs.placeholder = 'NPC IDs comma seperated'
+        elemNPCIDs.value = '41'
+
+        const elemGroundItemIDs = document.createElement('input')
+        elemGroundItemIDs.id = 'elemGroundItemIDs'
+        elemGroundItemIDs.placeholder = 'Pickup Item IDs comma seperated'
+        elemGroundItemIDs.value = '314,526'
+
+        const elemBuryLabel = document.createElement('div');
+        elemBuryLabel.innerText = 'Bury Bones?'
+
+        const elemBuryBones = document.createElement('input')
+        elemBuryBones.id = 'elemBuryBones'
+        elemBuryBones.type = 'checkbox';
+        elemBuryBones.checked = true;
+
+        base.appendChild(elemAttackStyle)
+        base.appendChild(document.createElement('br'))
+        base.appendChild(elemNPCIDs)
+        base.appendChild(document.createElement('br'))
+        base.appendChild(elemGroundItemIDs)
+        base.appendChild(document.createElement('br'))
+        base.appendChild(elemBuryLabel)
+        base.appendChild(elemBuryBones)
+    }
+
+    static buildFromHtml(base: HTMLElement) {
+        const elemAttackStyle = document.getElementById('elemAttackStyle')?.value
+        const elemNPCIDs = document.getElementById('elemNPCIDs')?.value.split(',')
+        const elemGroundItemIDs = document.getElementById('elemGroundItemIDs')?.value.split(',')
+        const elemBuryBones = document.getElementById('elemBuryBones')?.checked
+
+        return new AutoKiller(elemAttackStyle, elemNPCIDs, elemGroundItemIDs, elemBuryBones)
+    }
+
     start(bot: Bot) {
         if (!bot.hasTimer(TIMER_ENABLE_RUN)) {
             bot.enableRun();

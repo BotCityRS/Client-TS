@@ -16,11 +16,13 @@ export default class Bot {
     lastCombatUpdate: number;
     isInCombatScore: number;
     timers: any;
+    scripts: any[];
 
     constructor(client: Client, window: Window) {
         window.bot = this;
         this.client = client;
 
+        this.scripts = [AutoKiller];
     
         this.lastCombatUpdate = new Date().getTime();
         this.isInCombatScore = -1000;
