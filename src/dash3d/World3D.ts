@@ -24,7 +24,7 @@ import { Int32Array3d, TypedArray1d, TypedArray2d, TypedArray3d, TypedArray4d } 
 
 export default class World3D {
     private static visibilityMatrix: boolean[][][][] = new TypedArray4d(8, 32, 51, 51, false);
-    private static locBuffer: (Location | null)[] = new TypedArray1d(100, null);
+    static locBuffer: (Location | null)[] = new TypedArray1d(100, null);
     static levelOccluderCount: Int32Array = new Int32Array(CollisionConstants.LEVELS);
     private static levelOccluders: (Occlude | null)[][] = new TypedArray2d(CollisionConstants.LEVELS, 500, null);
     private static activeOccluders: (Occlude | null)[] = new TypedArray1d(500, null);
@@ -206,7 +206,7 @@ export default class World3D {
     private readonly maxTileX: number;
     private readonly maxTileZ: number;
     private readonly levelHeightmaps: Int32Array[][];
-    private readonly levelTiles: (Ground | null)[][][];
+    readonly levelTiles: (Ground | null)[][][];
     private readonly temporaryLocs: (Location | null)[];
     private readonly levelTileOcclusionCycles: Int32Array[][];
     private readonly mergeIndexA: Int32Array;

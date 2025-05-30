@@ -1333,7 +1333,7 @@ export class Client extends GameShell {
             }
             if (reply === 3) {
                 this.loginMessage0 = '';
-                this.loginMessage1 = 'Invalid 2423423 or password.';
+                this.loginMessage1 = 'Invalid username or password.';
                 return;
             }
             if (reply === 4) {
@@ -2329,6 +2329,18 @@ export class Client extends GameShell {
                 line++;
             }
         }
+    }
+
+    getModel() {
+        return Model;
+    }
+
+    getLocType() {
+        return LocType;
+    }
+
+    getScene() {
+        return World3D;
     }
 
     handleViewportOptions(): void {
@@ -7930,10 +7942,6 @@ export class Client extends GameShell {
         const a: number = this.menuParamA[optionId];
         const b: number = this.menuParamB[optionId];
         const c: number = this.menuParamC[optionId];
-
-        if (action == 3214 || a == 3214 || b == 3214 || c == 3214) {
-            console.info('aay)')
-        }
 
         console.info('Menu action: ', action, a, b, c)
 
