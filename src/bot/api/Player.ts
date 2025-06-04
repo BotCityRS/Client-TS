@@ -1,5 +1,7 @@
 import PlayerEntity from "#/dash3d/entity/PlayerEntity";
 import type BotAPI from "./BotAPI";
+import Timer from "./Timer";
+import Utility from "./Utility";
 
 export default class Player {
     api: BotAPI;
@@ -52,7 +54,7 @@ export default class Player {
     isAnimating() {
         return (this.api.client.localPlayer?.primarySeqId ?? -1) >= 0
     }
-
+    
     changeAttackStyle(index: number) {
         // TODO make change on weapon held
         const scim_ids = [2429, 2432, 2431, 2430];

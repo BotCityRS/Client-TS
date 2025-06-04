@@ -515,6 +515,7 @@ export class Client extends GameShell {
     displayFps: boolean = false;
 
     bot: Bot;
+    record: any = [];
 
     // ----
 
@@ -5418,6 +5419,10 @@ export class Client extends GameShell {
         if (!collisionMap) {
             return false;
         }
+
+        const xz = [dx + this.sceneBaseTileX, dz + this.sceneBaseTileZ];
+        console.info('Move to: ', xz)
+        this.record.push(xz)
 
         const sceneWidth: number = CollisionConstants.SIZE;
         const sceneLength: number = CollisionConstants.SIZE;

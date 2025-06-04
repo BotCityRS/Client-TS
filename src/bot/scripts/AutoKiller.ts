@@ -17,7 +17,7 @@ export default class AutoKiller extends BotScript {
     timer: Timer;
 
     constructor(attackStyle: number, npcIDs: number[], groundItemIDs: number[], buryBones: boolean) {
-        super()
+        super('AutoKiller')
         this.attackStyle = attackStyle
         this.npcIDs = npcIDs
         this.groundItemIDs = groundItemIDs
@@ -74,7 +74,7 @@ export default class AutoKiller extends BotScript {
         return new AutoKiller(elemAttackStyle, elemNPCIDs, elemGroundItemIDs, elemBuryBones)
     }
 
-    start(bot: Bot) {
+    update(bot: Bot) {
         let api = bot.api;
         api.tryLogin(()=>{
             api.player.enableRun();

@@ -3,7 +3,6 @@ import Component from "#/config/Component";
 import ObjType from "#/config/ObjType";
 import NpcEntity from "#/dash3d/entity/NpcEntity";
 import type ObjStackEntity from "#/dash3d/entity/ObjStackEntity";
-import type World from "#/dash3d/World";
 import type Bot from "../Bot";
 import BotScript from "../scripts/BotScript";
 import Bank from "./Bank";
@@ -14,6 +13,7 @@ import NPC from "./NPC";
 import Player from "./Player";
 import Timer from "./Timer";
 import Utility from "./Utility";
+import World from "./World";
 import WorldObject from "./WorldObject";
 
 const BOT_TIMER_WALK = -20;
@@ -31,7 +31,7 @@ export default class BotAPI {
     groundItem: GroundItem;
     interface: Interface;
     private systemTimer: Timer;
-    //world: World;
+    world: World;
 
     constructor(bot: Bot) {
         this.bot = bot;
@@ -45,6 +45,7 @@ export default class BotAPI {
         this.npc = new NPC(this);
         this.worldObject = new WorldObject(this);
         this.groundItem = new GroundItem(this);
+        this.world = new World(this);
         this.systemTimer = Timer.SystemTimer();
     }
 

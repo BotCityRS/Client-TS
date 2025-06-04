@@ -47,9 +47,21 @@ export default class NPC {
         const npcs = this.getAllByIds(ids, includeInCombat);
         let nearestNPC: ClientNPCEntity|null = null;
         for (let i = 0; i < npcs.length; ++i) {
-            let dist = Utility.getDistance(this.api.player.x, this.api.player.z, npcs[i].x, npcs[i].z);
-            npcs[i].playerDist = dist;
-            if (!nearestNPC || dist < nearestNPC.playerDist) {
+            if (!nearestNPC || npcs[i].playerDist < nearestNPC.playerDist) {
+                nearestNPC = npcs[i];
+            }
+        }
+        return nearestNPC;
+    }
+
+    getNPCByIdsNearestIf(ids: number[], checkFunc: (npc: ClientNPCEntity)=>boolean) {
+        if (!this.api.isLoggedIn()) {
+            return null;
+        }
+        const npcs = this.getAllByIds(ids, true);
+        let nearestNPC: ClientNPCEntity|null = null;
+        for (let i = 0; i < npcs.length; ++i) {
+            if (checkFunc(npcs[i]) && (!nearestNPC || npcs[i].playerDist < nearestNPC.playerDist)) {
                 nearestNPC = npcs[i];
             }
         }

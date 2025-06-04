@@ -33,7 +33,12 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
     }
 
     open() {
-        this.api.worldObject.getNearestById([2213])?.interact(1)
+        const bankBooth = this.api.worldObject.getNearestById([2213]);
+        if (!bankBooth) {
+            return false;
+        }
+        bankBooth.interact(1)
+        return true;
     }
 
     close() {

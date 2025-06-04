@@ -1,5 +1,12 @@
 import type Bot from "../Bot";
 
 export default class BotScript {
-    start(bot: Bot): void {}
+    name: string;
+    
+    constructor(name:string) {
+        this.name = name;
+    }
+
+    update(bot: Bot): void {}
+    stop(bot: Bot): void {}
 };
