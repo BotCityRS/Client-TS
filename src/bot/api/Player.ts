@@ -54,11 +54,23 @@ export default class Player {
     isAnimating() {
         return (this.api.client.localPlayer?.primarySeqId ?? -1) >= 0
     }
-    
+
     changeAttackStyle(index: number) {
         // TODO make change on weapon held
         const scim_ids = [2429, 2432, 2431, 2430];
         const sword_ids = [2282, 2285, 2284, 2283];
         this.api.doAction(960, 0, 0, sword_ids[index]);
+    }
+
+    getLevel(skillId: number) {
+        return this.api.client.skillLevel[skillId];
+    }
+
+    getBaseLevel(skillId: number) {
+        return this.api.client.skillBaseLevel[skillId];
+    }
+
+    getXP(skillId: number) {
+        return this.api.client.skillExperience[skillId];
     }
 }

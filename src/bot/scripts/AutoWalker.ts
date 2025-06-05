@@ -39,6 +39,9 @@ export default class AutoWalker extends BotScript {
         label: 'Falador <-> Varrock',
         path: World.paths.FALADOR_TO_VARROCK
     }, {
+        label: 'Falador <-> Catherby',
+        path: World.paths.FALADOR_TO_CATHERBY
+    }, {
         label: 'Varrock <-> Lumbridge',
         path: World.paths.VARROCK_TO_LUMBRIDGE
     }]

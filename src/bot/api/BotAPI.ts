@@ -6,6 +6,7 @@ import type ObjStackEntity from "#/dash3d/entity/ObjStackEntity";
 import type Bot from "../Bot";
 import BotScript from "../scripts/BotScript";
 import Bank from "./Bank";
+import Equipment from "./Equipment";
 import GroundItem from "./GroundItem";
 import Interface from "./Interface";
 import Inventory from "./Inventory";
@@ -25,6 +26,7 @@ export default class BotAPI {
     util: Utility;
     bank: Bank;
     inventory: Inventory;
+    equipment: Equipment;
     player: Player;
     npc: NPC;
     worldObject: WorldObject;
@@ -42,6 +44,7 @@ export default class BotAPI {
         this.bank = new Bank(this);
         this.player = new Player(this);
         this.inventory = new Inventory(this);
+        this.equipment = new Equipment(this);
         this.npc = new NPC(this);
         this.worldObject = new WorldObject(this);
         this.groundItem = new GroundItem(this);

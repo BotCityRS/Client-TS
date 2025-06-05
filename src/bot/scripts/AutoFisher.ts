@@ -8,7 +8,6 @@ const TIMER_GAME_INTERACT = 0;
 const TIMER_ENABLE_RUN = 1;
 
 type FishLocation = {
-    id: number,
     label: string,
     itemReq: number,
     baitReq: number,
@@ -20,7 +19,6 @@ export default class AutoFisher extends BotScript {
     timer: Timer;
 
     static locations: FishLocation[] = [{
-        id: 0,
         label: 'Draynor Small Net',
         itemReq: 303,
         baitReq: -1,
@@ -28,7 +26,6 @@ export default class AutoFisher extends BotScript {
         poolIds: [327],
         poolInteractOption: 0,
     }, {
-        id: 1,
         label: 'Draynor Bait',
         itemReq: 307,
         baitReq: 313,
@@ -36,7 +33,6 @@ export default class AutoFisher extends BotScript {
         poolIds: [327],
         poolInteractOption: 1,
     }, {
-        id: 2,
         label: 'Barbarian Fly',
         itemReq: 309,
         baitReq: 314,
@@ -44,13 +40,40 @@ export default class AutoFisher extends BotScript {
         poolIds: [328],
         poolInteractOption: 0,
     }, {
-        id: 3,
         label: 'Barbarian Bait',
         itemReq: 307,
         baitReq: 313,
         pathToBank: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
         poolIds: [328],
         poolInteractOption: 1,
+    }, {
+        label: 'Catherby Cage',
+        itemReq: 301,
+        baitReq: -1,
+        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        poolIds: [321],
+        poolInteractOption: 0,
+    }, {
+        label: 'Catherby Harpoon (Swordfish)',
+        itemReq: 311,
+        baitReq: -1,
+        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        poolIds: [321],
+        poolInteractOption: 1,
+    }, {
+        label: 'Catherby Harpoon (Shark)',
+        itemReq: 311,
+        baitReq: -1,
+        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        poolIds: [322],
+        poolInteractOption: 1,
+    }, {
+        label: 'Catherby Big Net',
+        itemReq: 305,
+        baitReq: -1,
+        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        poolIds: [322],
+        poolInteractOption: 0,
     }]
     location: FishLocation;
 
@@ -67,9 +90,9 @@ export default class AutoFisher extends BotScript {
         const elemLocation = document.createElement('select')
         elemLocation.id = 'elemLocation'
 
-        AutoFisher.locations.forEach(loc => {
+        AutoFisher.locations.forEach((loc, i) => {
             const option = document.createElement('option');
-            option.value = loc.id.toString();
+            option.value = String(i);
             option.textContent = loc.label;
             elemLocation.appendChild(option);
         });

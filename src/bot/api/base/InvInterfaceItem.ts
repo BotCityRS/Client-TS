@@ -15,6 +15,14 @@ export default class InvInterfaceItem extends InterfaceItem {
         this.api.doAction(optionIds[optionIndex], this.id, this.slot, this.interfaceId);
     }
 
+    drop() {
+        this.api.doAction(347, this.id, this.slot, this.interfaceId);
+    }
+
+    equip() {
+        this.interact(1)
+    }
+
     deposit1() {
         if (!this.api.bank.isOpen()) {
             return;
