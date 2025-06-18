@@ -17,7 +17,7 @@ export default class AutoKiller extends BotScript {
     timer: Timer;
 
     constructor(attackStyle: number, npcIDs: number[], groundItemIDs: number[], buryBones: boolean) {
-        super('AutoKiller')
+        super('AutoKiller', true)
         this.attackStyle = attackStyle
         this.npcIDs = npcIDs
         this.groundItemIDs = groundItemIDs
