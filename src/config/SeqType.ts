@@ -1,98 +1,162 @@
-import { ConfigType } from '#/config/ConfigType.js';
-
-import AnimFrame from '#/graphics/AnimFrame.js';
+import AnimFrame from '#/dash3d/AnimFrame.js';
 
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 
-export default class SeqType extends ConfigType {
-    static totalCount: number = 0;
-    static instances: SeqType[] = [];
+export const enum PreanimMove {
+    DELAYMOVE = 0,
+    DELAYANIM = 1,
+    MERGE = 2
+}
 
-    seqFrameCount: number = 0;
-    seqFrames: Int16Array | null = null;
-    seqIframes: Int16Array | null = null;
-    seqDelay: Int16Array | null = null;
-    replayoff: number = -1;
+export const enum PostanimMove {
+    DELAYMOVE = 0,
+    ABORTANIM = 1,
+    MERGE = 2
+}
+
+export const enum RestartMode {
+    RESET = 1,
+    RESETLOOP = 2
+}
+
+export default class SeqType {
+    static numDefinitions: number = 0;
+    static list: SeqType[] = [];
+
+    numFrames: number = 0;
+    frames: Int16Array | null = null;
+    iframes: Int16Array | null = null;
+    delay: Int16Array | null = null;
+    loops: number = -1;
     walkmerge: Int32Array | null = null;
     stretches: boolean = false;
-    seqPriority: number = 5;
-    righthand: number = -1;
-    lefthand: number = -1;
-    replaycount: number = 99;
-    seqDuration: number = 0;
+    priority: number = 5;
+    replaceheldleft: number = -1;
+    replaceheldright: number = -1;
+    maxloops: number = 99;
+    preanim_move: number = -1;
+    postanim_move: number = -1;
+    duplicatebehaviour: number = -1;
 
-
-    static unpack(config: Jagfile): void {
+    static init(config: Jagfile): void {
         const dat: Packet = new Packet(config.read('seq.dat'));
-        this.totalCount = dat.g2();
-        for (let i: number = 0; i < this.totalCount; i++) {
-            const seq: SeqType = new SeqType(i).unpackType(dat);
-            if (seq.seqFrameCount === 0) {
-                seq.seqFrameCount = 1;
 
-                seq.seqFrames = new Int16Array(1);
-                seq.seqFrames[0] = -1;
+        this.numDefinitions = dat.g2();
+        this.list = new Array(this.numDefinitions);
 
-                seq.seqIframes = new Int16Array(1);
-                seq.seqIframes[0] = -1;
-
-                seq.seqDelay = new Int16Array(1);
-                seq.seqDelay[0] = -1;
+        for (let id: number = 0; id < this.numDefinitions; id++) {
+            if (!this.list[id]) {
+                this.list[id] = new SeqType();
             }
-            this.instances[i] = seq;
+
+            this.list[id].decode(dat);
         }
     }
 
-    unpack(code: number, dat: Packet): void {
-        if (code === 1) {
-            this.seqFrameCount = dat.g1();
-            this.seqFrames = new Int16Array(this.seqFrameCount);
-            this.seqIframes = new Int16Array(this.seqFrameCount);
-            this.seqDelay = new Int16Array(this.seqFrameCount);
+    getDuration(frame: number) {
+        if (!this.delay || !this.frames) {
+            return 0;
+        }
 
-            for (let i: number = 0; i < this.seqFrameCount; i++) {
-                this.seqFrames[i] = dat.g2();
+        let duration = this.delay[frame];
 
-                this.seqIframes[i] = dat.g2();
-                if (this.seqIframes[i] === 65535) {
-                    this.seqIframes[i] = -1;
-                }
-
-                this.seqDelay[i] = dat.g2();
-                if (this.seqDelay[i] === 0) {
-                    this.seqDelay[i] = AnimFrame.instances[this.seqFrames[i]].frameDelay;
-                }
-
-                if (this.seqDelay[i] === 0) {
-                    this.seqDelay[i] = 1;
-                }
-
-                this.seqDuration += this.seqDelay[i];
+        if (duration === 0) {
+            const transform = AnimFrame.get(this.frames[frame]);
+            if (transform != null) {
+                duration = this.delay[frame] = transform.delay;
             }
-        } else if (code === 2) {
-            this.replayoff = dat.g2();
-        } else if (code === 3) {
-            const count: number = dat.g1();
-            this.walkmerge = new Int32Array(count + 1);
+        }
 
-            for (let i: number = 0; i < count; i++) {
-                this.walkmerge[i] = dat.g1();
+        if (duration === 0) {
+            duration = 1;
+        }
+
+        return duration;
+    }
+
+    decode(dat: Packet): void {
+        while (true) {
+            const code = dat.g1();
+            if (code === 0) {
+                break;
             }
 
-            this.walkmerge[count] = 9999999;
-        } else if (code === 4) {
-            this.stretches = true;
-        } else if (code === 5) {
-            this.seqPriority = dat.g1();
-        } else if (code === 6) {
-            this.righthand = dat.g2();
-        } else if (code === 7) {
-            this.lefthand = dat.g2();
-        } else if (code === 8) {
-            this.replaycount = dat.g1();
-        } else {
-            console.log('Error unrecognised seq config code: ', code);
+            if (code === 1) {
+                this.numFrames = dat.g1();
+                this.frames = new Int16Array(this.numFrames);
+                this.iframes = new Int16Array(this.numFrames);
+                this.delay = new Int16Array(this.numFrames);
+
+                for (let i: number = 0; i < this.numFrames; i++) {
+                    this.frames[i] = dat.g2();
+
+                    this.iframes[i] = dat.g2();
+                    if (this.iframes[i] === 65535) {
+                        this.iframes[i] = -1;
+                    }
+
+                    this.delay[i] = dat.g2();
+                }
+            } else if (code === 2) {
+                this.loops = dat.g2();
+            } else if (code === 3) {
+                const count: number = dat.g1();
+                this.walkmerge = new Int32Array(count + 1);
+
+                for (let i: number = 0; i < count; i++) {
+                    this.walkmerge[i] = dat.g1();
+                }
+
+                this.walkmerge[count] = 9999999;
+            } else if (code === 4) {
+                this.stretches = true;
+            } else if (code === 5) {
+                this.priority = dat.g1();
+            } else if (code === 6) {
+                this.replaceheldleft = dat.g2();
+            } else if (code === 7) {
+                this.replaceheldright = dat.g2();
+            } else if (code === 8) {
+                this.maxloops = dat.g1();
+            } else if (code === 9) {
+                this.preanim_move = dat.g1();
+            } else if (code === 10) {
+                this.postanim_move = dat.g1();
+            } else if (code === 11) {
+                this.duplicatebehaviour = dat.g1();
+            } else {
+                console.log('Error unrecognised seq config code: ', code);
+            }
+        }
+
+        if (this.numFrames === 0) {
+            this.numFrames = 1;
+
+            this.frames = new Int16Array(1);
+            this.frames[0] = -1;
+
+            this.iframes = new Int16Array(1);
+            this.iframes[0] = -1;
+
+            this.delay = new Int16Array(1);
+            this.delay[0] = -1;
+        }
+
+        if (this.preanim_move === -1) {
+            if (this.walkmerge === null) {
+                this.preanim_move = PreanimMove.DELAYMOVE;
+            } else {
+                this.preanim_move = PreanimMove.MERGE;
+            }
+        }
+
+        if (this.postanim_move === -1) {
+            if (this.walkmerge === null) {
+                this.postanim_move = PostanimMove.DELAYMOVE;
+            } else {
+                this.postanim_move = PostanimMove.MERGE;
+            }
         }
     }
 }

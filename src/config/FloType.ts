@@ -1,104 +1,64 @@
-import { ConfigType } from '#/config/ConfigType.js';
-
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 
-export default class FloType extends ConfigType {
-    static totalCount: number = 0;
-    static instances: FloType[] = [];
+export default class FloType {
+    static numDefinitions: number = 0;
+    static list: FloType[] = [];
 
-    static unpack(config: Jagfile): void {
-        const dat: Packet = new Packet(config.read('flo.dat'));
-        this.totalCount = dat.g2();
-        for (let i: number = 0; i < this.totalCount; i++) {
-            this.instances[i] = new FloType(i).unpackType(dat);
-        }
-    }
-
-    static hsl24to16(hue: number, saturation: number, lightness: number): number {
-        if (lightness > 179) {
-            saturation = (saturation / 2) | 0;
-        }
-        if (lightness > 192) {
-            saturation = (saturation / 2) | 0;
-        }
-        if (lightness > 217) {
-            saturation = (saturation / 2) | 0;
-        }
-        if (lightness > 243) {
-            saturation = (saturation / 2) | 0;
-        }
-        return (((hue / 4) | 0) << 10) + (((saturation / 32) | 0) << 7) + ((lightness / 2) | 0);
-    }
-
-    static mulHSL(hsl: number, lightness: number): number {
-        if (hsl === -1) {
-            return 12345678;
-        }
-        lightness = ((lightness * (hsl & 0x7f)) / 128) | 0;
-        if (lightness < 2) {
-            lightness = 2;
-        } else if (lightness > 126) {
-            lightness = 126;
-        }
-        return (hsl & 0xff80) + lightness;
-    }
-
-    static adjustLightness(hsl: number, scalar: number): number {
-        if (hsl === -2) {
-            return 12345678;
-        }
-
-        if (hsl === -1) {
-            if (scalar < 0) {
-                scalar = 0;
-            } else if (scalar > 127) {
-                scalar = 127;
-            }
-            return 127 - scalar;
-        } else {
-            scalar = ((scalar * (hsl & 0x7f)) / 128) | 0;
-            if (scalar < 2) {
-                scalar = 2;
-            } else if (scalar > 126) {
-                scalar = 126;
-            }
-            return (hsl & 0xff80) + scalar;
-        }
-    }
-
-    // ----
     rgb: number = 0;
-    overlayTexture: number = -1;
-    opcode3: boolean = false;
+    texture: number = -1;
+    overlay: boolean = false;
     occlude: boolean = true;
+    debugname: string = '';
 
-    // runtime
     hue: number = 0;
     saturation: number = 0;
     lightness: number = 0;
-    luminance: number = 0;
-    chroma: number = 0;
-    hsl: number = 0;
 
-    unpack(code: number, dat: Packet): void {
-        if (code === 1) {
-            this.rgb = dat.g3();
-            this.setColor(this.rgb);
-        } else if (code === 2) {
-            this.overlayTexture = dat.g1();
-        } else if (code === 3) {
-            this.opcode3 = true;
-        } else if (code === 5) {
-            this.occlude = false;
-        } else if (code === 6) {
-            this.debugname = dat.gjstr();
-        } else {
-            console.log('Error unrecognised config code: ', code);
+    chroma: number = 0;
+    underlayHue: number = 0;
+    overlayHsl: number = 0;
+
+    static init(config: Jagfile): void {
+        const dat: Packet = new Packet(config.read('flo.dat'));
+
+        this.numDefinitions = dat.g2();
+        this.list = new Array(this.numDefinitions);
+
+        for (let id: number = 0; id < this.numDefinitions; id++) {
+            if (!this.list[id]) {
+                this.list[id] = new FloType();
+            }
+
+            this.list[id].decode(dat);
         }
     }
 
-    private setColor(rgb: number): void {
+    decode(dat: Packet): void {
+        while (true) {
+            const code = dat.g1();
+            if (code === 0) {
+                break;
+            }
+
+            if (code === 1) {
+                this.rgb = dat.g3();
+                this.getHsl(this.rgb);
+            } else if (code === 2) {
+                this.texture = dat.g1();
+            } else if (code === 3) {
+                this.overlay = true;
+            } else if (code === 5) {
+                this.occlude = false;
+            } else if (code === 6) {
+                this.debugname = dat.gjstr();
+            } else {
+                console.log('Error unrecognised config code: ', code);
+            }
+        }
+    }
+
+    private getHsl(rgb: number): void {
         const red: number = ((rgb >> 16) & 0xff) / 256.0;
         const green: number = ((rgb >> 8) & 0xff) / 256.0;
         const blue: number = (rgb & 0xff) / 256.0;
@@ -159,16 +119,16 @@ export default class FloType extends ConfigType {
         }
 
         if (l > 0.5) {
-            this.luminance = ((1.0 - l) * s * 512.0) | 0;
+            this.chroma = ((1.0 - l) * s * 512.0) | 0;
         } else {
-            this.luminance = (l * s * 512.0) | 0;
+            this.chroma = (l * s * 512.0) | 0;
         }
 
-        if (this.luminance < 1) {
-            this.luminance = 1;
+        if (this.chroma < 1) {
+            this.chroma = 1;
         }
 
-        this.chroma = (h * this.luminance) | 0;
+        this.underlayHue = (h * this.chroma) | 0;
 
         let hue: number = this.hue + ((Math.random() * 16.0) | 0) - 8;
         if (hue < 0) {
@@ -191,6 +151,26 @@ export default class FloType extends ConfigType {
             lightness = 255;
         }
 
-        this.hsl = FloType.hsl24to16(hue, saturation, lightness);
+        this.overlayHsl = FloType.getTable(hue, saturation, lightness);
+    }
+
+    static getTable(hue: number, saturation: number, lightness: number): number {
+        if (lightness > 179) {
+            saturation = (saturation / 2) | 0;
+        }
+
+        if (lightness > 192) {
+            saturation = (saturation / 2) | 0;
+        }
+
+        if (lightness > 217) {
+            saturation = (saturation / 2) | 0;
+        }
+
+        if (lightness > 243) {
+            saturation = (saturation / 2) | 0;
+        }
+
+        return (((hue / 4) | 0) << 10) + (((saturation / 32) | 0) << 7) + ((lightness / 2) | 0);
     }
 }
