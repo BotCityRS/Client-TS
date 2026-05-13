@@ -1,4 +1,3 @@
-
 import type BotAPI from "./BotAPI";
 import Timer from "./Timer";
 import Utility from "./Utility";
@@ -8,7 +7,7 @@ export type Path = PathNode[];
 
 export default class World {
     api: BotAPI;
-    static paths: {[pathName: string]: Path} = {
+    static paths: { [pathName: string]: Path } = {
         DRAYNOR_TO_LUMBRIDGE: [[3092, 3248], [3103, 3236], [3109, 3226], [3126, 3222], [3136, 3225], [3148, 3229], [3160, 3232], [3173, 3236], [3186, 3240], [3191, 3238], [3206, 3242], [3218, 3238], [3229, 3228], [3233, 3219]],
         DRAYNOR_TO_FALADOR: [[3080,3260],[3071,3276],[3058,3278],[3041,3281],[3025,3278],[3015,3278],[3011,3290],[3010,3292],[3006,3307],[3007,3324],[3007,3339],[3006,3353],[3006,3363]],
         FALADOR_TO_BARB_VILLAGE: [[2993,3370],[2979,3379],[2965,3386],[2966,3396],[2976,3409],[2985,3419],[2993,3430],[3009,3432],[3024,3431],[3035,3431],[3046,3429],[3059,3427],[3069,3418],[3083,3419]],
@@ -20,24 +19,24 @@ export default class World {
         FALADOR_TO_CATHERBY: [[2978,3378],[2965,3388],[2961,3402],[2958,3415],[2954,3420],[2949,3433],[2941,3450],[2935,3451],[2919,3456],[2903,3454],[2889,3446],[2890,3439],[2871,3439],[2866,3455],[2859,3465],[2856,3476],[2861,3492],[2856,3507],[2850,3497],[2851,3482],[2845,3470],[2846,3452],[2844,3435],[2827,3438],[2809,3439]],
     };
 
-    pathCompleteCallback: ((result: boolean)=>void) | null = null;
+    pathCompleteCallback: ((result: boolean) => void) | null = null;
 
     constructor(api: BotAPI) {
         this.api = api;
     }
 
     distanceTo(x: number, z: number) {
-        const offsetX = this.api.client.sceneBaseTileX;
-        const offsetZ = this.api.client.sceneBaseTileZ;
-        const px = this.api.player.getLocalX()
-        const pz = this.api.player.getLocalZ()
-        return Utility.getDistance(px, pz, x - offsetX, z - offsetZ)
+        const offsetX = this.api.surface.sceneBaseTileX;
+        const offsetZ = this.api.surface.sceneBaseTileZ;
+        const px = this.api.player.getLocalX();
+        const pz = this.api.player.getLocalZ();
+        return Utility.getDistance(px, pz, x - offsetX, z - offsetZ);
     }
 
     moveTo(x: number, z: number) {
-        const offsetX = this.api.client.sceneBaseTileX;
-        const offsetZ = this.api.client.sceneBaseTileZ;
-        this.api.client.tryMove(this.api.player.getLocalX(), this.api.player.getLocalZ(), x - offsetX, z - offsetZ, 0, 0, 0, 0, 0, 0, true);
+        const offsetX = this.api.surface.sceneBaseTileX;
+        const offsetZ = this.api.surface.sceneBaseTileZ;
+        this.api.surface.tryMoveToTile(this.api.player.getLocalX(), this.api.player.getLocalZ(), x - offsetX, z - offsetZ);
     }
 
     stopPath() {
@@ -56,22 +55,22 @@ export default class World {
             let nearestI = -1;
             let nearDist = Number.MAX_SAFE_INTEGER;
             path.forEach((n: PathNode, i: number) => {
-                const dist = this.api.world.distanceTo(n[0], n[1])
+                const dist = this.api.world.distanceTo(n[0], n[1]);
                 if (dist < nearDist && dist < 100) {
                     nearDist = dist;
                     nearestI = i;
                 }
             });
             return nearestI;
-        }
+        };
 
         let n = findNearestNode(path);
 
-        return new Promise((res: (result: boolean)=>void, rej) => {
+        return new Promise((res: (result: boolean) => void) => {
             const timer = new Timer();
             let walkRef: number | undefined = undefined;
             const pathCompleteCallback = (result: boolean) => {
-                clearInterval(walkRef)
+                clearInterval(walkRef);
                 res(result);
                 this.pathCompleteCallback = null;
             };
@@ -82,15 +81,15 @@ export default class World {
 
             walkRef = setInterval(() => {
                 if (n < 0) {
-                    return this.pathCompleteCallback?.(true)
+                    return this.pathCompleteCallback?.(true);
                 }
                 const curNode = path[n];
                 let tries = 10;
-                const dist = this.api.world.distanceTo(curNode[0], curNode[1])
-                console.info('dist:', dist)
+                const dist = this.api.world.distanceTo(curNode[0], curNode[1]);
+                console.info('dist:', dist);
                 if ((dist > nodeDist && this.api.player.isMoving()) || timer.hasTimer(0) || tries < 0) {
                     if (dist > 100 || tries < 0) {
-                        this.pathCompleteCallback?.(false)
+                        this.pathCompleteCallback?.(false);
                     }
                     return;
                 }
@@ -99,15 +98,8 @@ export default class World {
                     n += movement;
                     tries = 0;
                 }
-                if (n >= path.length || n < 0) {
-                    return this.pathCompleteCallback?.(true)
-                } else {
-                    this.moveTo(path[n][0], path[n][1])
-                    this.api.player.enableRun()
-                    timer.setTimer(0, 1200)
-                }
-            }, 100)
-        })
+                this.api.world.moveTo(curNode[0], curNode[1]);
+            }, 500) as unknown as number;
+        });
     }
-
 }

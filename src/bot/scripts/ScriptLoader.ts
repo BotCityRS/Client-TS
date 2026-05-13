@@ -81,10 +81,11 @@ export default class ScriptLoader extends BotScript {
     }
 
     static createScriptClass(className: string, startScript: string, updateScript: string, endScript: string, htmlSetupScript: string, buildFromHtmlScript: string) {
+        const safeName = JSON.stringify(className);
         return new Function('BotScript', 'startCode', 'updateCode', 'stopCode', 'htmlSetupCode', 'buildFromHtmlCode', `
             return class ${className} extends BotScript {
                 constructor() {
-                    super('${className}', false);
+                    super(${safeName}, false);
                     this.start = new Function('bot', startCode);
                     this.update = new Function('bot', updateCode);
                     this.stop = new Function('bot', stopCode);

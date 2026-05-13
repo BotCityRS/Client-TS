@@ -1,14 +1,14 @@
-import Component from "#/config/Component";
-import ObjType from "#/config/ObjType";
+import IfType from "#/config/IfType.js";
+import ObjType from "#/config/ObjType.js";
 import type BotAPI from "../BotAPI";
 import InterfaceItem from "./InterfaceItem";
 
 export default class ItemContainer<T extends InterfaceItem> {
     api: BotAPI;
     interfaceId: number;
-    InterfaceItemType: new (...args: any[]) => T;
+    InterfaceItemType: new (...args: unknown[]) => T;
 
-    constructor(api: BotAPI, interfaceId: number, InterfaceItemType: new (...args: any[]) => T) {
+    constructor(api: BotAPI, interfaceId: number, InterfaceItemType: new (...args: unknown[]) => T) {
         this.api = api;
         this.interfaceId = interfaceId;
         this.InterfaceItemType = InterfaceItemType;
@@ -19,7 +19,8 @@ export default class ItemContainer<T extends InterfaceItem> {
     }
 
     getContainerSize() {
-        return this.api.interface.getInterface(this.interfaceId).invSlotObjId?.length ?? 0;
+        const inv = this.api.interface.getInterface(this.interfaceId);
+        return inv?.linkObjType?.length ?? 0;
     }
 
     hasItem(id: number) {
@@ -32,12 +33,16 @@ export default class ItemContainer<T extends InterfaceItem> {
 
     getItemBySlot(slotId: number): T | null {
         const inv = this.api.interface.getInterface(this.interfaceId);
-        const slotItem = inv.invSlotObjId?.[slotId];
-        const slotCount = inv.invSlotObjCount?.[slotId] ?? 0;
-        if (slotItem && slotItem > 0) {
-            const realSlotItem = ObjType.get(slotItem - 1);
-            const invItem = this.createItem(this.api, this.interfaceId, slotId, realSlotItem.id, slotCount)
-            return invItem;
+        const types = inv?.linkObjType;
+        const counts = inv?.linkObjNumber;
+        if (!types || !counts) {
+            return null;
+        }
+        const slotItem = types[slotId];
+        const slotCount = counts[slotId] ?? 0;
+        if (slotItem > 0) {
+            const realSlotItem = ObjType.list(slotItem - 1);
+            return this.createItem(this.api, this.interfaceId, slotId, realSlotItem.id, slotCount);
         }
         return null;
     }
@@ -45,7 +50,7 @@ export default class ItemContainer<T extends InterfaceItem> {
     getItemById(id: number): T | null {
         const size = this.getContainerSize();
         for (let i = 0; i < size; ++i) {
-            let item = this.getItemBySlot(i);
+            const item = this.getItemBySlot(i);
             if (item && item.id == id) {
                 return item;
             }
@@ -60,8 +65,9 @@ export default class ItemContainer<T extends InterfaceItem> {
             if (!this.getItemBySlot(s)) {
                 freeReq--;
             }
-            if (freeReq <= 0)
+            if (freeReq <= 0) {
                 return false;
+            }
         }
         return true;
     }

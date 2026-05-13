@@ -1,10 +1,5 @@
-import { Client } from "#/client/Client";
-import Component from "#/config/Component";
-import ObjType from "#/config/ObjType";
-import NpcEntity from "#/dash3d/entity/NpcEntity";
-import type ObjStackEntity from "#/dash3d/entity/ObjStackEntity";
 import type Bot from "../Bot";
-import BotScript from "../scripts/BotScript";
+import BotScriptingSurface, { createBotSurface } from "../BotScriptingSurface";
 import Bank from "./Bank";
 import Equipment from "./Equipment";
 import GroundItem from "./GroundItem";
@@ -17,11 +12,9 @@ import Utility from "./Utility";
 import World from "./World";
 import WorldObject from "./WorldObject";
 
-const BOT_TIMER_WALK = -20;
-
 export default class BotAPI {
     bot: Bot;
-    client: Client;
+    readonly surface: BotScriptingSurface;
 
     util: Utility;
     bank: Bank;
@@ -37,7 +30,7 @@ export default class BotAPI {
 
     constructor(bot: Bot) {
         this.bot = bot;
-        this.client = bot.client;
+        this.surface = createBotSurface(bot.client);
 
         this.util = new Utility();
         this.interface = new Interface();
@@ -52,23 +45,20 @@ export default class BotAPI {
         this.systemTimer = Timer.SystemTimer();
     }
 
-    setMenuOptions(menuOption:number, p1: number, p2: number, p3: number) {
-        this.client.menuAction[0] = menuOption;
-        this.client.menuParamA[0] = p1;
-        this.client.menuParamB[0] = p2;
-        this.client.menuParamC[0] = p3;
+    setMenuOptions(menuOption: number, p1: number, p2: number, p3: number) {
+        this.surface.setMenuSlot(menuOption, p1, p2, p3);
     }
 
-    async doAction(menuOption:number, p1: number, p2: number, p3: number) {
+    async doAction(menuOption: number, p1: number, p2: number, p3: number) {
         this.setMenuOptions(menuOption, p1, p2, p3);
-        this.client.useMenuOption(0); 
+        this.surface.runDoAction(0);
     }
 
     isLoggedIn() {
-        return this.client.ingame;
+        return this.surface.ingame;
     }
 
-    tryLogin(onSuccess: ()=>void) {
+    tryLogin(onSuccess: () => void) {
         const TIMER_LOGGING_IN = 0;
         const TIMER_LOGIN_WAIT = 1;
         const TIMER_SETUP_ACCOUNT_ON_LOGIN = 2;
@@ -79,7 +69,7 @@ export default class BotAPI {
         }
         if (this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
             if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGIN_WAIT)) {
-                this.client.tryLogin(this.client.usernameInput, this.client.passwordInput, true)
+                void this.surface.login(this.surface.loginUsername, this.surface.loginPassword, true);
                 this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3001);
             }
             if (this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)) {

@@ -1,4 +1,3 @@
-import { Client } from "#/client/Client";
 import ClientNPCEntity from "./base/ClientNPCEntity";
 import type BotAPI from "./BotAPI";
 import Utility from "./Utility";
@@ -14,13 +13,12 @@ export default class NPC {
         if (!this.api.isLoggedIn()) {
             return [];
         }
-        const _npcs = this.api.client.npcs;
+        const _npcs = this.api.surface.npcs;
         const npcs: ClientNPCEntity[] = [];
         for (let i = 0; i < _npcs.length; ++i) {
-            let entity = _npcs[i];
+            const entity = _npcs[i];
             if (entity != null) {
-                let clientNPC = new ClientNPCEntity(this.api, i, entity);
-                npcs.push(clientNPC);
+                npcs.push(new ClientNPCEntity(this.api, i, entity));
             }
         }
         return npcs;
@@ -31,9 +29,9 @@ export default class NPC {
             return [];
         }
         const npcs = this.getAll();
-        let orderedNPCs: ClientNPCEntity[] = [];
+        const orderedNPCs: ClientNPCEntity[] = [];
         for (let i = 0; i < npcs.length; ++i) {
-            if (npcs[i] && Utility.includes(ids, npcs[i].id) && (!includeInCombat || npcs[i].npc.targetId == -1)) {
+            if (npcs[i] && Utility.includes(ids, npcs[i].id) && (!includeInCombat || npcs[i].npc.faceEntity == -1)) {
                 orderedNPCs.push(npcs[i]);
             }
         }
@@ -45,7 +43,7 @@ export default class NPC {
             return null;
         }
         const npcs = this.getAllByIds(ids, includeInCombat);
-        let nearestNPC: ClientNPCEntity|null = null;
+        let nearestNPC: ClientNPCEntity | null = null;
         for (let i = 0; i < npcs.length; ++i) {
             if (!nearestNPC || npcs[i].playerDist < nearestNPC.playerDist) {
                 nearestNPC = npcs[i];
@@ -54,12 +52,12 @@ export default class NPC {
         return nearestNPC;
     }
 
-    getNPCByIdsNearestIf(ids: number[], checkFunc: (npc: ClientNPCEntity)=>boolean) {
+    getNPCByIdsNearestIf(ids: number[], checkFunc: (npc: ClientNPCEntity) => boolean) {
         if (!this.api.isLoggedIn()) {
             return null;
         }
         const npcs = this.getAllByIds(ids, true);
-        let nearestNPC: ClientNPCEntity|null = null;
+        let nearestNPC: ClientNPCEntity | null = null;
         for (let i = 0; i < npcs.length; ++i) {
             if (checkFunc(npcs[i]) && (!nearestNPC || npcs[i].playerDist < nearestNPC.playerDist)) {
                 nearestNPC = npcs[i];

@@ -21,13 +21,16 @@ type BunOutput = {
     sourcemap: string;
 }
 
-async function bunBuild(entry: string, external: string[] = [], minify = true, drop: string[] = []): Promise<BunOutput> {
+async function bunBuild(entry: string, external: string[] = [], prodMinify = true, drop: string[] = []): Promise<BunOutput> {
     const build = await Bun.build({
         entrypoints: [entry],
         sourcemap: 'external',
         define,
         external,
-        minify,
+        // Whitespace/syntax only so class/Function `.name` stays readable (bot script dropdown, etc.).
+        minify: prodMinify
+            ? { whitespace: true, syntax: true, identifiers: false }
+            : false,
         drop,
     });
 
@@ -55,6 +58,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
             ecma: 2020
         },
         mangle: {
+            keep_classnames: true,
+            keep_fnames: true,
             nth_identifier: nth_identifier,
             properties: {
                 reserved: [
@@ -108,7 +113,17 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'midi_render',
                     'setValue',
                     'getValue',
-                    'calledRun'
+                    'calledRun',
+
+                    // Bot + client.ejs inline handlers use window.bot.<name>; property mangle must keep these.
+                    'bot',
+                    'reloadScripts',
+                    'setScriptChoice',
+                    '_injStartScript',
+                    '_injDeleteScript',
+                    'saveScript',
+                    'deleteScript',
+                    'stop'
                 ]
             }
         }
@@ -131,12 +146,12 @@ const args = process.argv.slice(2);
 const prod = args[0] !== 'dev';
 
 const entrypoints = [
-    'src/client/Client.ts',
+    'src/client/ClientWithBot.ts',
     'src/mapview/MapView.ts'
 ];
 
 for (const file of entrypoints) {
-    const output = path.basename(file).replace('.ts', '.js').toLowerCase();
+    const output = file.endsWith('ClientWithBot.ts') ? 'client.js' : path.basename(file).replace('.ts', '.js').toLowerCase();
 
     const script = await bunBuild(file, [], prod, prod ? ['console'] : []);
     if (script) {

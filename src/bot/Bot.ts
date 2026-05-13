@@ -1,8 +1,4 @@
-import { Client } from "#/client/Client";
-import Component from "#/config/Component";
-import ObjType from "#/config/ObjType";
-import NpcEntity from "#/dash3d/entity/NpcEntity";
-import type ObjStackEntity from "#/dash3d/entity/ObjStackEntity";
+import type { Client } from "#/client/Client.js";
 import BotAPI from "./api/BotAPI";
 import AutoFisher from "./scripts/AutoFisher";
 import AutoKiller from "./scripts/AutoKiller";
@@ -11,11 +7,14 @@ import BotScript from "./scripts/BotScript";
 import LumbyThievSuicide from "./scripts/LumbyThievSuicide";
 import ScriptLoader from "./scripts/ScriptLoader";
 
-const BOT_TIMER_WALK = -20;
+/** Script list key: constructor `name` (preserved by bundle + Terser `keep_classnames`). */
+function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
+    return scriptCtor.name;
+}
 
 export default class Bot {
     client: Client;
-        
+
     intervalHandle: number;
 
     api: BotAPI;
@@ -23,8 +22,10 @@ export default class Bot {
 
     currentScript: BotScript | null = null;
 
-    constructor(client: Client, window: Window) {
-        window.bot = this;
+    _injStartScript?: () => void;
+    _injDeleteScript?: () => void;
+
+    constructor(client: Client) {
         this.client = client;
 
         this.scripts = [ScriptLoader, AutoKiller, AutoFisher, LumbyThievSuicide, AutoWalker];
@@ -35,20 +36,27 @@ export default class Bot {
 
     setScriptChoice() {
         const botParams = document.getElementById('botparams');
-        const target = document.getElementById('botscripts')?.value;
+        const target = (document.getElementById('botscripts') as HTMLSelectElement | null)?.value;
 
+        if (!botParams) {
+            return;
+        }
         botParams.innerHTML = '';
 
-        for (let i = 0; i < this.scripts.length; ++i) {
-            if (this.scripts[i].name == target) {
-                this.scripts[i].htmlSetup(botParams)
+        for (let i: number = 0; i < this.scripts.length; ++i) {
+            if (scriptRegistryKey(this.scripts[i]) === target) {
+                this.scripts[i].htmlSetup(botParams);
                 this._injStartScript = () => {
-                    this.start(this.scripts[i].buildFromHtml())
-                }
+                    const C = this.scripts[i] as unknown as { buildFromHtml(el: HTMLElement): BotScript };
+                    this.start(C.buildFromHtml(botParams));
+                };
                 this._injDeleteScript = () => {
-                    this.deleteScript(this.scripts[i].name)
+                    this.deleteScript(scriptRegistryKey(this.scripts[i]));
+                };
+                const del = document.getElementById('deleteBot');
+                if (del) {
+                    del.hidden = new this.scripts[i]().isSystemScript;
                 }
-                document.getElementById('deleteBot').hidden = (new this.scripts[i]()).isSystemScript;
                 break;
             }
         }
@@ -62,7 +70,7 @@ export default class Bot {
             endScript,
             htmlSetupScript,
             buildFromHtmlScript,
-        }))
+        }));
         this.reloadScripts();
     }
 
@@ -72,29 +80,34 @@ export default class Bot {
     }
 
     reloadScripts() {
-        const elemBotScripts = document.getElementById('botscripts')
+        const elemBotScripts = document.getElementById('botscripts');
 
         elemBotScripts?.replaceChildren();
 
         for (let i = this.scripts.length - 1; i >= 0; i--) {
-            if (!(new this.scripts[i]()).isSystemScript) {
-                this.scripts.splice(i, 1)
+            if (!new this.scripts[i]().isSystemScript) {
+                this.scripts.splice(i, 1);
             }
         }
 
         for (let i = 0; i < localStorage.length; ++i) {
             const lsKey = localStorage.key(i);
             if (lsKey?.startsWith('localScript_')) {
-                const scData = JSON.parse(localStorage.getItem(lsKey));
+                const raw = localStorage.getItem(lsKey);
+                if (!raw) {
+                    continue;
+                }
+                const scData = JSON.parse(raw);
                 const builtClass = ScriptLoader.createScriptClass(scData.name, scData.startScript, scData.updateScript, scData.endScript, scData.htmlSetupScript, scData.buildFromHtmlScript);
-                window.bot.scripts.push(builtClass);
+                this.scripts.push(builtClass);
             }
         }
 
         this.scripts.forEach(script => {
             const option = document.createElement('option');
-            option.value = script.name;
-            option.textContent = script.name;
+            const key = scriptRegistryKey(script);
+            option.value = key;
+            option.textContent = key;
             elemBotScripts?.appendChild(option);
         });
 
@@ -105,16 +118,15 @@ export default class Bot {
         this.stop();
         this.currentScript = script;
         const tickFunc = () => {
-            //client.resetIdleTimeout();
-            script.update(this)
-        }
+            script.update(this);
+        };
         script.start(this);
-        this.intervalHandle = setInterval(tickFunc, 100);
+        this.intervalHandle = setInterval(tickFunc, 100) as unknown as number;
         console.info('Script started.');
     }
 
     stop() {
-        this.currentScript?.stop(this)
+        this.currentScript?.stop(this);
         clearInterval(this.intervalHandle);
         console.info('Script stopped.');
     }

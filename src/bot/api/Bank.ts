@@ -2,6 +2,8 @@ import BankInterfaceItem from "./base/BankInterfaceItem";
 import ItemContainer from "./base/ItemContainer";
 import BotAPI from "./BotAPI";
 
+const BANK_ROOT_IF = 2005;
+
 export default class Bank extends ItemContainer<BankInterfaceItem> {
     bankOpenState: boolean;
 
@@ -12,12 +14,12 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
             if (this.isOpen() != this.bankOpenState) {
                 this.bankOpenState = !this.bankOpenState;
                 if (this.bankOpenState) {
-                    this.onOpen()
+                    this.onOpen();
                 } else {
-                    this.onClose()
+                    this.onClose();
                 }
             }
-        }, 100)
+        }, 100);
     }
 
     onOpen() {
@@ -29,7 +31,7 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
     }
 
     isOpen() {
-        return this.api.client.sidebarInterfaceId == 2005;
+        return this.api.surface.isBankSidebarOpen(BANK_ROOT_IF);
     }
 
     open() {
@@ -37,30 +39,31 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
         if (!bankBooth) {
             return false;
         }
-        bankBooth.interact(1)
+        bankBooth.interact(1);
         return true;
     }
 
     close() {
-        this.api.doAction(947, -1, -1, 5384)
+        this.api.doAction(947, -1, -1, 5384);
     }
 
     async withdraw(id: number, amount: number = 1) {
-        await this.getItemById(id)?.withdraw(amount)
+        await this.getItemById(id)?.withdraw(amount);
     }
 
     depositAll() {
         this.onOpen();
-        for (let s = 0; s < this.api.inventory.getContainerSize(); ++s)
-            this.api.inventory.getItemBySlot(s)?.depositAll()
+        for (let s = 0; s < this.api.inventory.getContainerSize(); ++s) {
+            this.api.inventory.getItemBySlot(s)?.depositAll();
+        }
     }
 
     depositAllExcept(ids: number[]) {
         this.onOpen();
         for (let s = 0; s < this.api.inventory.getContainerSize(); ++s) {
-            const item = this.api.inventory.getItemBySlot(s)
+            const item = this.api.inventory.getItemBySlot(s);
             if (item && !ids.includes(item.id)) {
-                item?.depositAll()
+                item?.depositAll();
             }
         }
     }

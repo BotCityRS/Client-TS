@@ -1,11 +1,7 @@
-import Component from "#/config/Component";
+import IfType from "#/config/IfType.js";
 
 export default class Interface {
-    constructor() {
-
-    }
-
     getInterface(id: number) {
-        return Component.instances[id];
+        return IfType.list[id];
     }
 }
