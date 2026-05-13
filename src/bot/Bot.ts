@@ -1,16 +1,24 @@
-import type { Client } from "#/client/Client.js";
-import BotAPI from "./api/BotAPI";
-import AutoFisher from "./scripts/AutoFisher";
-import AutoKiller from "./scripts/AutoKiller";
-import AutoWalker from "./scripts/AutoWalker";
-import BotScript from "./scripts/BotScript";
-import LumbyThievSuicide from "./scripts/LumbyThievSuicide";
-import ScriptLoader from "./scripts/ScriptLoader";
+import type { Client } from '#/client/Client.js';
+import BotAPI from './api/BotAPI';
+import AutoFisher from './scripts/AutoFisher';
+import AutoKiller from './scripts/AutoKiller';
+import AutoWalker from './scripts/AutoWalker';
+import BotScript from './scripts/BotScript';
+import LumbyThievSuicide from './scripts/LumbyThievSuicide';
+import ScriptLoader from './scripts/ScriptLoader';
 
 /** Script list key: constructor `name` (preserved by bundle + Terser `keep_classnames`). */
 function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
     return scriptCtor.name;
 }
+
+type BotDebugFlags = {
+    itemIds: boolean;
+    npcIds: boolean;
+    worldObjectIds: boolean;
+};
+
+const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
 
 export default class Bot {
     client: Client;
@@ -24,12 +32,90 @@ export default class Bot {
 
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
+    private activeTab: 'script' | 'debug' = 'script';
+    private debugFlags: BotDebugFlags = {
+        itemIds: false,
+        npcIds: false,
+        worldObjectIds: false
+    };
 
     private setSummary(text: string) {
         const summary = document.getElementById('botScriptSummary');
         if (summary) {
             summary.textContent = text;
         }
+    }
+
+    private getClientWithDebugSetter(): { setBotDebugFlags(flags: BotDebugFlags): void } {
+        return this.client as unknown as { setBotDebugFlags(flags: BotDebugFlags): void };
+    }
+
+    private applyDebugFlags() {
+        this.getClientWithDebugSetter().setBotDebugFlags(this.debugFlags);
+    }
+
+    private saveDebugFlags() {
+        localStorage.setItem(BOT_DEBUG_STORAGE_KEY, JSON.stringify(this.debugFlags));
+    }
+
+    private loadDebugFlags() {
+        const raw = localStorage.getItem(BOT_DEBUG_STORAGE_KEY);
+        if (!raw) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as Partial<BotDebugFlags>;
+            this.debugFlags = {
+                itemIds: parsed.itemIds === true,
+                npcIds: parsed.npcIds === true,
+                worldObjectIds: parsed.worldObjectIds === true
+            };
+        } catch {
+            this.debugFlags = { itemIds: false, npcIds: false, worldObjectIds: false };
+        }
+    }
+
+    private setTab(tab: 'script' | 'debug') {
+        this.activeTab = tab;
+        const scriptButton = document.getElementById('botTabScript');
+        const debugButton = document.getElementById('botTabDebug');
+        const scriptPanel = document.getElementById('bot-script-panel');
+        const debugPanel = document.getElementById('bot-debug-panel');
+
+        scriptButton?.classList.toggle('bot-tab-active', tab === 'script');
+        debugButton?.classList.toggle('bot-tab-active', tab === 'debug');
+        scriptPanel?.classList.toggle('bot-panel-active', tab === 'script');
+        debugPanel?.classList.toggle('bot-panel-active', tab === 'debug');
+    }
+
+    private bindDebugToggle(id: string, key: keyof BotDebugFlags) {
+        const checkbox = document.getElementById(id) as HTMLInputElement | null;
+        if (!checkbox) {
+            return;
+        }
+
+        checkbox.checked = this.debugFlags[key];
+        checkbox.onchange = () => {
+            this.debugFlags[key] = checkbox.checked;
+            this.saveDebugFlags();
+            this.applyDebugFlags();
+        };
+    }
+
+    private initUi() {
+        this.loadDebugFlags();
+        this.applyDebugFlags();
+
+        const scriptButton = document.getElementById('botTabScript');
+        const debugButton = document.getElementById('botTabDebug');
+        scriptButton?.addEventListener('click', () => this.setTab('script'));
+        debugButton?.addEventListener('click', () => this.setTab('debug'));
+        this.setTab(this.activeTab);
+
+        this.bindDebugToggle('botDebugItemIds', 'itemIds');
+        this.bindDebugToggle('botDebugNpcIds', 'npcIds');
+        this.bindDebugToggle('botDebugWorldObjectIds', 'worldObjectIds');
     }
 
     constructor(client: Client) {
@@ -39,6 +125,7 @@ export default class Bot {
         this.api = new BotAPI(this);
 
         this.intervalHandle = -1;
+        this.initUi();
     }
 
     setScriptChoice() {

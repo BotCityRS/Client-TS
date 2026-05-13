@@ -82,6 +82,13 @@ const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
 
+type BotDebugFlags = {
+    itemIds: boolean;
+    npcIds: boolean;
+    worldObjectIds: boolean;
+};
+const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
+
 export class Client extends GameShell {
     static levelExperience: number[] = [];
     static readbit = new Int32Array(32);
@@ -113,6 +120,9 @@ export class Client extends GameShell {
 
     private showFps: boolean = false;
     private rebootTimer: number = 0;
+    private debugItemIds: boolean = false;
+    private debugNpcIds: boolean = false;
+    private debugWorldObjectIds: boolean = false;
 
     private hintType: number = 0;
     private hintNpc: number = 0;
@@ -4842,6 +4852,7 @@ export class Client extends GameShell {
                         this.headicons[2]?.plotSprite(this.projectX - 12, this.projectY - 28);
                     }
                 }
+
             } else {
                 let y: number = 30;
 
@@ -5248,6 +5259,46 @@ export class Client extends GameShell {
 
     private getOverlayPosEntity(entity: ClientEntity, height: number): void {
         this.getOverlayPos(entity.x, entity.z, height);
+    }
+
+    public setBotDebugFlags(flags: BotDebugFlags): void {
+        this.debugItemIds = flags.itemIds;
+        this.debugNpcIds = flags.npcIds;
+        this.debugWorldObjectIds = flags.worldObjectIds;
+    }
+
+    private readPersistedDebugFlags(): BotDebugFlags {
+        const defaults: BotDebugFlags = {
+            itemIds: this.debugItemIds,
+            npcIds: this.debugNpcIds,
+            worldObjectIds: this.debugWorldObjectIds
+        };
+        try {
+            const raw = localStorage.getItem(BOT_DEBUG_STORAGE_KEY);
+            if (!raw) {
+                return defaults;
+            }
+            const parsed = JSON.parse(raw) as Partial<BotDebugFlags>;
+            return {
+                itemIds: parsed.itemIds === true || defaults.itemIds,
+                npcIds: parsed.npcIds === true || defaults.npcIds,
+                worldObjectIds: parsed.worldObjectIds === true || defaults.worldObjectIds
+            };
+        } catch {
+            return defaults;
+        }
+    }
+
+    private debugNpcIdSuffix(npcId: number): string {
+        return this.readPersistedDebugFlags().npcIds ? ` @cya@[id:${npcId}]@whi@` : '';
+    }
+
+    private debugWorldObjectIdSuffix(worldObjectId: number): string {
+        return this.readPersistedDebugFlags().worldObjectIds ? ` @cya@[id:${worldObjectId}]@whi@` : '';
+    }
+
+    private debugItemIdSuffix(itemId: number): string {
+        return this.readPersistedDebugFlags().itemIds ? ` @cya@[id:${itemId}]@whi@` : '';
     }
 
     private getOverlayPos(x: number, z: number, height: number): void {
@@ -9530,9 +9581,10 @@ export class Client extends GameShell {
 
             if (entityType === 2 && this.world && this.world.typeCode2(this.minusedlevel, x, z, typecode) >= 0) {
                 const loc: LocType = LocType.list(typeId);
+                const locIdSuffix = this.debugWorldObjectIdSuffix(typeId);
 
                 if (this.useMode === 1) {
-                    this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @cya@' + loc.name;
+                    this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @cya@' + loc.name + locIdSuffix;
                     this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_ONLOC;
                     this.menuParamA[this.menuNumEntries] = typecode;
                     this.menuParamB[this.menuNumEntries] = x;
@@ -9540,7 +9592,7 @@ export class Client extends GameShell {
                     this.menuNumEntries++;
                 } else if (this.targetMode === 1) {
                     if ((this.targetMask & 0x4) === 4) {
-                        this.menuOption[this.menuNumEntries] = this.targetOp + ' @cya@' + loc.name;
+                        this.menuOption[this.menuNumEntries] = this.targetOp + ' @cya@' + loc.name + locIdSuffix;
                         this.menuAction[this.menuNumEntries] = MiniMenuAction.TGT_LOC;
                         this.menuParamA[this.menuNumEntries] = typecode;
                         this.menuParamB[this.menuNumEntries] = x;
@@ -9554,7 +9606,7 @@ export class Client extends GameShell {
                                 continue;
                             }
 
-                            this.menuOption[this.menuNumEntries] = loc.op[i] + ' @cya@' + loc.name;
+                            this.menuOption[this.menuNumEntries] = loc.op[i] + ' @cya@' + loc.name + locIdSuffix;
 
                             if (i === 0) {
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_LOC1;
@@ -9575,7 +9627,7 @@ export class Client extends GameShell {
                         }
                     }
 
-                    this.menuOption[this.menuNumEntries] = 'Examine @cya@' + loc.name;
+                    this.menuOption[this.menuNumEntries] = 'Examine @cya@' + loc.name + locIdSuffix;
                     this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_LOC6;
                     this.menuParamA[this.menuNumEntries] = typecode;
                     this.menuParamB[this.menuNumEntries] = x;
@@ -9630,8 +9682,9 @@ export class Client extends GameShell {
 
                 for (let obj = objs.tail(); obj !== null; obj = objs.prev()) {
                     const type: ObjType = ObjType.list(obj.id);
+                    const itemIdSuffix = this.debugItemIdSuffix(obj.id);
                     if (this.useMode === 1) {
-                        this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + type.name;
+                        this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + type.name + itemIdSuffix;
                         this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_ONOBJ;
                         this.menuParamA[this.menuNumEntries] = obj.id;
                         this.menuParamB[this.menuNumEntries] = x;
@@ -9639,7 +9692,7 @@ export class Client extends GameShell {
                         this.menuNumEntries++;
                     } else if (this.targetMode === 1) {
                         if ((this.targetMask & 0x1) === 1) {
-                            this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + type.name;
+                            this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + type.name + itemIdSuffix;
                             this.menuAction[this.menuNumEntries] = MiniMenuAction.TGT_OBJ;
                             this.menuParamA[this.menuNumEntries] = obj.id;
                             this.menuParamB[this.menuNumEntries] = x;
@@ -9649,7 +9702,7 @@ export class Client extends GameShell {
                     } else {
                         for (let op: number = 4; op >= 0; op--) {
                             if (type.op && type.op[op]) {
-                                this.menuOption[this.menuNumEntries] = type.op[op] + ' @lre@' + type.name;
+                                this.menuOption[this.menuNumEntries] = type.op[op] + ' @lre@' + type.name + itemIdSuffix;
 
                                 if (op === 0) {
                                     this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_OBJ1;
@@ -9668,7 +9721,7 @@ export class Client extends GameShell {
                                 this.menuParamC[this.menuNumEntries] = z;
                                 this.menuNumEntries++;
                             } else if (op === 2) {
-                                this.menuOption[this.menuNumEntries] = 'Take @lre@' + type.name;
+                                this.menuOption[this.menuNumEntries] = 'Take @lre@' + type.name + itemIdSuffix;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_OBJ3;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = x;
@@ -9677,7 +9730,7 @@ export class Client extends GameShell {
                             }
                         }
 
-                        this.menuOption[this.menuNumEntries] = 'Examine @lre@' + type.name;
+                        this.menuOption[this.menuNumEntries] = 'Examine @lre@' + type.name + itemIdSuffix;
                         this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_OBJ6;
                         this.menuParamA[this.menuNumEntries] = obj.id;
                         this.menuParamB[this.menuNumEntries] = x;
@@ -9698,9 +9751,10 @@ export class Client extends GameShell {
         if (npc.vislevel !== 0 && this.localPlayer) {
             tooltip = tooltip + this.combatColourCode(this.localPlayer.combatLevel, npc.vislevel) + ' (level-' + npc.vislevel + ')';
         }
+        const npcIdSuffix = this.debugNpcIdSuffix(npc.id);
 
         if (this.useMode === 1) {
-            this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @yel@' + tooltip;
+            this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @yel@' + tooltip + npcIdSuffix;
             this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_ONNPC;
             this.menuParamA[this.menuNumEntries] = a;
             this.menuParamB[this.menuNumEntries] = b;
@@ -9708,7 +9762,7 @@ export class Client extends GameShell {
             this.menuNumEntries++;
         } else if (this.targetMode === 1) {
             if ((this.targetMask & 0x2) === 2) {
-                this.menuOption[this.menuNumEntries] = this.targetOp + ' @yel@' + tooltip;
+                this.menuOption[this.menuNumEntries] = this.targetOp + ' @yel@' + tooltip + npcIdSuffix;
                 this.menuAction[this.menuNumEntries] = MiniMenuAction.TGT_NPC;
                 this.menuParamA[this.menuNumEntries] = a;
                 this.menuParamB[this.menuNumEntries] = b;
@@ -9722,7 +9776,7 @@ export class Client extends GameShell {
                         continue;
                     }
 
-                    this.menuOption[this.menuNumEntries] = npc.op[i] + ' @yel@' + tooltip;
+                    this.menuOption[this.menuNumEntries] = npc.op[i] + ' @yel@' + tooltip + npcIdSuffix;
 
                     if (i === 0) {
                         this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_NPC1;
@@ -9754,7 +9808,7 @@ export class Client extends GameShell {
                         priority = MiniMenuAction._PRIORITY;
                     }
 
-                    this.menuOption[this.menuNumEntries] = npc.op[i] + ' @yel@' + tooltip;
+                    this.menuOption[this.menuNumEntries] = npc.op[i] + ' @yel@' + tooltip + npcIdSuffix;
 
                     if (i === 0) {
                         this.menuAction[this.menuNumEntries] = priority + MiniMenuAction.OP_NPC1;
@@ -9775,7 +9829,7 @@ export class Client extends GameShell {
                 }
             }
 
-            this.menuOption[this.menuNumEntries] = 'Examine @yel@' + tooltip;
+            this.menuOption[this.menuNumEntries] = 'Examine @yel@' + tooltip + npcIdSuffix;
             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_NPC6;
             this.menuParamA[this.menuNumEntries] = a;
             this.menuParamB[this.menuNumEntries] = b;
@@ -9911,10 +9965,11 @@ export class Client extends GameShell {
                         }
 
                         const obj: ObjType = ObjType.list(child.linkObjType[slot] - 1);
+                        const itemIdSuffix = this.debugItemIdSuffix(obj.id);
 
                         if (this.useMode === 1 && child.objOps) {
                             if (child.id !== this.objSelectedComId || slot !== this.objSelectedSlot) {
-                                this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + obj.name + itemIdSuffix;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_ONHELD;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9923,7 +9978,7 @@ export class Client extends GameShell {
                             }
                         } else if (this.targetMode === 1 && child.objOps) {
                             if ((this.targetMask & 0x10) === 16) {
-                                this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + obj.name + itemIdSuffix;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.TGT_HELD;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9934,7 +9989,7 @@ export class Client extends GameShell {
                             if (child.objOps) {
                                 for (let op: number = 4; op >= 3; op--) {
                                     if (obj.iop && obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name + itemIdSuffix;
 
                                         if (op === 3) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD4;
@@ -9947,7 +10002,7 @@ export class Client extends GameShell {
                                         this.menuParamC[this.menuNumEntries] = child.id;
                                         this.menuNumEntries++;
                                     } else if (op === 4) {
-                                        this.menuOption[this.menuNumEntries] = 'Drop @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = 'Drop @lre@' + obj.name + itemIdSuffix;
                                         this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD5;
                                         this.menuParamA[this.menuNumEntries] = obj.id;
                                         this.menuParamB[this.menuNumEntries] = slot;
@@ -9958,7 +10013,7 @@ export class Client extends GameShell {
                             }
 
                             if (child.objUse) {
-                                this.menuOption[this.menuNumEntries] = 'Use @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = 'Use @lre@' + obj.name + itemIdSuffix;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_START;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9969,7 +10024,7 @@ export class Client extends GameShell {
                             if (child.objOps && obj.iop) {
                                 for (let op: number = 2; op >= 0; op--) {
                                     if (obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name + itemIdSuffix;
 
                                         if (op === 0) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD1;
@@ -9990,7 +10045,7 @@ export class Client extends GameShell {
                             if (child.iop) {
                                 for (let op: number = 4; op >= 0; op--) {
                                     if (child.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = child.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = child.iop[op] + ' @lre@' + obj.name + itemIdSuffix;
 
                                         if (op === 0) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.INV_BUTTON1;
@@ -10012,7 +10067,7 @@ export class Client extends GameShell {
                                 }
                             }
 
-                            this.menuOption[this.menuNumEntries] = 'Examine @lre@' + obj.name;
+                            this.menuOption[this.menuNumEntries] = 'Examine @lre@' + obj.name + itemIdSuffix;
                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD6;
                             this.menuParamA[this.menuNumEntries] = obj.id;
                             this.menuParamB[this.menuNumEntries] = slot;
