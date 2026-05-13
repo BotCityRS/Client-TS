@@ -14,6 +14,37 @@ type WalkLocation = {
     path: Path
 };
 
+function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
+    const field = document.createElement('div');
+    field.className = 'bot-field';
+
+    const labelElem = document.createElement('label');
+    labelElem.className = 'bot-label';
+    labelElem.textContent = label;
+    field.appendChild(labelElem);
+
+    field.appendChild(input);
+
+    if (hint) {
+        const hintElem = document.createElement('small');
+        hintElem.className = 'bot-hint';
+        hintElem.textContent = hint;
+        field.appendChild(hintElem);
+    }
+
+    container.appendChild(field);
+}
+
+function getSelectNumber(id: string, fallback: number): number {
+    const raw = (document.getElementById(id) as HTMLSelectElement | null)?.value ?? '';
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getChecked(id: string): boolean {
+    return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+}
+
 export default class AutoWalker extends BotScript {
     timer: Timer;
 
@@ -60,15 +91,18 @@ export default class AutoWalker extends BotScript {
     }
 
     static htmlSetup(base: HTMLElement) {
+        const desc = document.createElement('p');
+        desc.className = 'bot-description';
+        desc.textContent = 'Walks a predefined route repeatedly or in reverse until the path completes.';
+        base.appendChild(desc);
+
         const elemLocation = document.createElement('select')
         elemLocation.id = 'elemLocation'
-
-        const elemReverseLabel = document.createElement('div');
-        elemReverseLabel.innerText = 'Reverse?'
 
         const elemReverse = document.createElement('input')
         elemReverse.id = 'elemReverse'
         elemReverse.type = 'checkbox';
+        elemReverse.className = 'bot-checkbox';
 
         AutoWalker.paths.forEach((loc, i) => {
             const option = document.createElement('option');
@@ -77,21 +111,19 @@ export default class AutoWalker extends BotScript {
             elemLocation.appendChild(option);
         });
 
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemLocation)
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemReverseLabel)
-        base.appendChild(elemReverse)
+        createField(base, 'Route', elemLocation, 'Choose a route pair. Script stops after arrival.');
+        createField(base, 'Walk route in reverse', elemReverse, 'If enabled, route direction is swapped.');
     }
 
     static buildFromHtml(base: HTMLElement) {
-        const elemLocation = document.getElementById('elemLocation')?.value
-        const traverse = !document.getElementById('elemReverse')?.checked
+        const elemLocation = getSelectNumber('elemLocation', 0);
+        const clampedLocation = Math.max(0, Math.min(elemLocation, AutoWalker.paths.length - 1));
+        const traverse = !getChecked('elemReverse')
 
-        return new AutoWalker(elemLocation, traverse)
+        return new AutoWalker(clampedLocation, traverse)
     }
 
-    update(bot: Bot) {
+    override update(bot: Bot) {
         let api = bot.api;
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
@@ -113,7 +145,7 @@ export default class AutoWalker extends BotScript {
         }
     }
 
-    stop(bot: Bot) {
+    override stop(bot: Bot) {
         bot.api.world.stopPath()
     }
 }

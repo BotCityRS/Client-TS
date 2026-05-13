@@ -8,6 +8,31 @@ import BotScript from "./BotScript";
 const TIMER_GAME_INTERACT = 0;
 const TIMER_ENABLE_RUN = 1;
 
+function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
+    const field = document.createElement('div');
+    field.className = 'bot-field';
+
+    const labelElem = document.createElement('label');
+    labelElem.className = 'bot-label';
+    labelElem.textContent = label;
+    field.appendChild(labelElem);
+
+    field.appendChild(input);
+
+    if (hint) {
+        const hintElem = document.createElement('small');
+        hintElem.className = 'bot-hint';
+        hintElem.textContent = hint;
+        field.appendChild(hintElem);
+    }
+
+    container.appendChild(field);
+}
+
+function getChecked(id: string): boolean {
+    return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+}
+
 export default class LumbyThievSuicide extends BotScript {
     timer: Timer;
     pickupCoins: boolean;
@@ -22,23 +47,22 @@ export default class LumbyThievSuicide extends BotScript {
     }
 
     static htmlSetup(base: HTMLElement) {
-
-        const elemPickupCoinsLabel = document.createElement('div');
-        elemPickupCoinsLabel.innerText = 'Pickup coins?'
+        const desc = document.createElement('p');
+        desc.className = 'bot-description';
+        desc.textContent = 'Steals from Lumbridge NPCs and optionally collects dropped coins.';
+        base.appendChild(desc);
 
         const elemPickupCoins = document.createElement('input')
         elemPickupCoins.id = 'elemPickupCoins'
         elemPickupCoins.type = 'checkbox';
         elemPickupCoins.checked = true;
+        elemPickupCoins.className = 'bot-checkbox';
 
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemPickupCoinsLabel)
-        base.appendChild(elemPickupCoins)
-        base.appendChild(document.createElement('br'))
+        createField(base, 'Pick up coins', elemPickupCoins, 'Collects nearby coin drops before thieving again.');
     }
 
     static buildFromHtml(base: HTMLElement) {
-        const pickupCoins = document.getElementById('elemPickupCoins')?.checked
+        const pickupCoins = getChecked('elemPickupCoins')
 
         return new LumbyThievSuicide(pickupCoins)
     }

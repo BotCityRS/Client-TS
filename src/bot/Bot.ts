@@ -25,6 +25,13 @@ export default class Bot {
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
 
+    private setSummary(text: string) {
+        const summary = document.getElementById('botScriptSummary');
+        if (summary) {
+            summary.textContent = text;
+        }
+    }
+
     constructor(client: Client) {
         this.client = client;
 
@@ -42,6 +49,7 @@ export default class Bot {
             return;
         }
         botParams.innerHTML = '';
+        this.setSummary('');
 
         for (let i: number = 0; i < this.scripts.length; ++i) {
             if (scriptRegistryKey(this.scripts[i]) === target) {
@@ -57,6 +65,7 @@ export default class Bot {
                 if (del) {
                     del.hidden = new this.scripts[i]().isSystemScript;
                 }
+                this.setSummary(`Configure ${target} and click Start Bot.`);
                 break;
             }
         }
@@ -81,6 +90,7 @@ export default class Bot {
 
     reloadScripts() {
         const elemBotScripts = document.getElementById('botscripts');
+        const previousSelection = (elemBotScripts as HTMLSelectElement | null)?.value;
 
         elemBotScripts?.replaceChildren();
 
@@ -110,6 +120,11 @@ export default class Bot {
             option.textContent = key;
             elemBotScripts?.appendChild(option);
         });
+
+        const select = elemBotScripts as HTMLSelectElement | null;
+        if (select && previousSelection && this.scripts.some(script => scriptRegistryKey(script) === previousSelection)) {
+            select.value = previousSelection;
+        }
 
         this.setScriptChoice();
     }

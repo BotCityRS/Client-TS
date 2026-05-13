@@ -15,6 +15,34 @@ type FishLocation = {
     poolIds: number[],
     poolInteractOption: number,
 };
+
+function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
+    const field = document.createElement('div');
+    field.className = 'bot-field';
+
+    const labelElem = document.createElement('label');
+    labelElem.className = 'bot-label';
+    labelElem.textContent = label;
+    field.appendChild(labelElem);
+
+    field.appendChild(input);
+
+    if (hint) {
+        const hintElem = document.createElement('small');
+        hintElem.className = 'bot-hint';
+        hintElem.textContent = hint;
+        field.appendChild(hintElem);
+    }
+
+    container.appendChild(field);
+}
+
+function getSelectNumber(id: string, fallback: number): number {
+    const raw = (document.getElementById(id) as HTMLSelectElement | null)?.value ?? '';
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export default class AutoFisher extends BotScript {
     timer: Timer;
 
@@ -87,6 +115,11 @@ export default class AutoFisher extends BotScript {
     }
 
     static htmlSetup(base: HTMLElement) {
+        const desc = document.createElement('p');
+        desc.className = 'bot-description';
+        desc.textContent = 'Automates fishing and banking for the selected location and method.';
+        base.appendChild(desc);
+
         const elemLocation = document.createElement('select')
         elemLocation.id = 'elemLocation'
 
@@ -97,18 +130,17 @@ export default class AutoFisher extends BotScript {
             elemLocation.appendChild(option);
         });
 
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemLocation)
-        base.appendChild(document.createElement('br'))
+        createField(base, 'Fishing location', elemLocation, 'Choose a preset with tool, bait, and bank route.');
     }
 
     static buildFromHtml(base: HTMLElement) {
-        const elemLocation = document.getElementById('elemLocation')?.value
+        const elemLocation = getSelectNumber('elemLocation', 0);
+        const clampedLocation = Math.max(0, Math.min(elemLocation, AutoFisher.locations.length - 1));
 
-        return new AutoFisher(elemLocation)
+        return new AutoFisher(clampedLocation)
     }
 
-    async update(bot: Bot) {
+    override async update(bot: Bot) {
         let api = bot.api;
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;

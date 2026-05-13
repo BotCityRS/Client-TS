@@ -9,6 +9,44 @@ const TIMER_RECENT_MOVING = 2;
 const TIMER_ENABLE_RUN = 3;
 const TIMER_LONG_WAIT_TARGET = 4;
 
+function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
+    const field = document.createElement('div');
+    field.className = 'bot-field';
+
+    const labelElem = document.createElement('label');
+    labelElem.className = 'bot-label';
+    labelElem.textContent = label;
+    field.appendChild(labelElem);
+
+    field.appendChild(input);
+
+    if (hint) {
+        const hintElem = document.createElement('small');
+        hintElem.className = 'bot-hint';
+        hintElem.textContent = hint;
+        field.appendChild(hintElem);
+    }
+
+    container.appendChild(field);
+}
+
+function getInputValue(id: string): string {
+    return (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
+}
+
+function getChecked(id: string): boolean {
+    return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+}
+
+function parseCsvIds(input: string, fallback: number[]): number[] {
+    const values = input
+        .split(',')
+        .map(token => Number.parseInt(token.trim(), 10))
+        .filter(value => Number.isFinite(value) && value >= 0);
+
+    return values.length > 0 ? values : fallback;
+}
+
 export default class AutoKiller extends BotScript {
     attackStyle: number
     npcIDs: number[]
@@ -32,49 +70,53 @@ export default class AutoKiller extends BotScript {
     }
 
     static htmlSetup(base: HTMLElement) {
-        const elemAttackStyle = document.createElement('input')
+        const desc = document.createElement('p');
+        desc.className = 'bot-description';
+        desc.textContent = 'Combat automation with target NPCs, optional loot pickup, and optional bone burying.';
+        base.appendChild(desc);
+
+        const elemAttackStyle = document.createElement('input');
         elemAttackStyle.id = 'elemAttackStyle'
-        elemAttackStyle.placeholder = 'Attack Style: 0 = atk, 1 = str, 2 = shared, 3 = def'
+        elemAttackStyle.type = 'number';
+        elemAttackStyle.min = '0';
+        elemAttackStyle.max = '3';
         elemAttackStyle.value = '0'
 
         const elemNPCIDs = document.createElement('input')
         elemNPCIDs.id = 'elemNPCIDs'
-        elemNPCIDs.placeholder = 'NPC IDs comma seperated'
+        elemNPCIDs.type = 'text';
+        elemNPCIDs.placeholder = '41, 82'
         elemNPCIDs.value = '41'
 
         const elemGroundItemIDs = document.createElement('input')
         elemGroundItemIDs.id = 'elemGroundItemIDs'
-        elemGroundItemIDs.placeholder = 'Pickup Item IDs comma seperated'
+        elemGroundItemIDs.type = 'text';
+        elemGroundItemIDs.placeholder = '314, 526'
         elemGroundItemIDs.value = '314,526'
-
-        const elemBuryLabel = document.createElement('div');
-        elemBuryLabel.innerText = 'Bury Bones?'
 
         const elemBuryBones = document.createElement('input')
         elemBuryBones.id = 'elemBuryBones'
         elemBuryBones.type = 'checkbox';
         elemBuryBones.checked = true;
+        elemBuryBones.className = 'bot-checkbox';
 
-        base.appendChild(elemAttackStyle)
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemNPCIDs)
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemGroundItemIDs)
-        base.appendChild(document.createElement('br'))
-        base.appendChild(elemBuryLabel)
-        base.appendChild(elemBuryBones)
+        createField(base, 'Attack style', elemAttackStyle, '0: Attack, 1: Strength, 2: Shared, 3: Defence');
+        createField(base, 'Target NPC IDs', elemNPCIDs, 'Comma-separated NPC IDs to attack.');
+        createField(base, 'Ground item IDs', elemGroundItemIDs, 'Comma-separated IDs to pick up while fighting.');
+        createField(base, 'Bury bones', elemBuryBones, 'Uses bones in inventory when available.');
     }
 
     static buildFromHtml(base: HTMLElement) {
-        const elemAttackStyle = document.getElementById('elemAttackStyle')?.value
-        const elemNPCIDs = document.getElementById('elemNPCIDs')?.value.split(',')
-        const elemGroundItemIDs = document.getElementById('elemGroundItemIDs')?.value.split(',')
-        const elemBuryBones = document.getElementById('elemBuryBones')?.checked
+        const parsedAttackStyle = Number.parseInt(getInputValue('elemAttackStyle'), 10);
+        const attackStyle = Number.isFinite(parsedAttackStyle) && parsedAttackStyle >= 0 && parsedAttackStyle <= 3 ? parsedAttackStyle : 0;
+        const npcIDs = parseCsvIds(getInputValue('elemNPCIDs'), [41]);
+        const groundItemIDs = parseCsvIds(getInputValue('elemGroundItemIDs'), [314, 526]);
+        const buryBones = getChecked('elemBuryBones');
 
-        return new AutoKiller(elemAttackStyle, elemNPCIDs, elemGroundItemIDs, elemBuryBones)
+        return new AutoKiller(attackStyle, npcIDs, groundItemIDs, buryBones)
     }
 
-    update(bot: Bot) {
+    override update(bot: Bot) {
         let api = bot.api;
         api.tryLogin(()=>{
             api.player.enableRun();
