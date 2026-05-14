@@ -8913,7 +8913,6 @@ export class Client extends GameShell {
         892,
         947,
         347,
-        99,
         1175,
         285,
         504,
@@ -8923,8 +8922,7 @@ export class Client extends GameShell {
         405,
         38,
         422,
-        1607,
-        99
+        1607
     ]);
 
     private doAction(optionId: number): void {

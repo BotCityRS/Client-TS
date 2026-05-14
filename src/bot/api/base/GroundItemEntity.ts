@@ -1,4 +1,4 @@
-import type Entity from "#/dash3d/entity/Entity";
+import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import type BotAPI from "../BotAPI";
 
 export default class GroundItemEntity {
@@ -20,6 +20,7 @@ export default class GroundItemEntity {
 
     pickUp() {
         this.api.bot.log('INFO', 'GroundItemEntity.pickUp', 'pickUp', { id: this.id, x: this.x, z: this.z });
-        this.api.doAction(99, this.id, this.x, this.z);
+        // Must match Client ground-object menu: default "Take" and op[2] use OP_OBJ3 → OPOBJ3 / type.op[2] on server.
+        this.api.doAction(MiniMenuAction.OP_OBJ3, this.id, this.x, this.z);
     }
 }
