@@ -1,3 +1,4 @@
+import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import { ClientProt } from "#/io/ClientProt.js";
 import type BotAPI from "../BotAPI";
 import InterfaceItem from "./InterfaceItem";
@@ -10,12 +11,12 @@ export default class InvInterfaceItem extends InterfaceItem {
     }
 
     interact(optionIndex: number) {
-        const optionIds = [405, 38, 422];
+        const optionIds = [MiniMenuAction.OP_HELD1, MiniMenuAction.OP_HELD2, MiniMenuAction.OP_HELD3];
         this.api.doAction(optionIds[optionIndex], this.id, this.slot, this.interfaceId);
     }
 
     drop() {
-        this.api.doAction(347, this.id, this.slot, this.interfaceId);
+        this.api.doAction(MiniMenuAction.OP_HELD5, this.id, this.slot, this.interfaceId);
     }
 
     equip() {

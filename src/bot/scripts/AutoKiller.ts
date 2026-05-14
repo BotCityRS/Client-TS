@@ -8,6 +8,7 @@ const TIMER_RECENT_TARGET = 1;
 const TIMER_RECENT_MOVING = 2;
 const TIMER_ENABLE_RUN = 3;
 const TIMER_LONG_WAIT_TARGET = 4;
+const TIMER_BURY = 5;
 
 function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
     const field = document.createElement('div');
@@ -68,6 +69,7 @@ export default class AutoKiller extends BotScript {
         this.timer.defineTimer('TIMER_RECENT_MOVING', TIMER_RECENT_MOVING)
         this.timer.defineTimer('TIMER_ENABLE_RUN', TIMER_ENABLE_RUN)
         this.timer.defineTimer('TIMER_LONG_WAIT_TARGET', TIMER_LONG_WAIT_TARGET)
+        this.timer.defineTimer('TIMER_BURY', TIMER_BURY)
     }
 
     static htmlSetup(base: HTMLElement) {
@@ -157,6 +159,15 @@ export default class AutoKiller extends BotScript {
         if (api.player.isInCombat()) {
             this.timer.setTimer(TIMER_LONG_WAIT_TARGET, 4000);
         }
+        if (this.buryBones && !this.timer.hasTimer(TIMER_BURY) && !this.timer.hasTimer(TIMER_GAME_INTERACT)) {
+            const bone = api.inventory.getItemById(526) ?? api.inventory.getItemById(532);
+            if (bone) {
+                api.bot.log('INFO', 'AutoKiller.update', 'bury bone', { id: bone.id, slot: bone.slot });
+                bone.interact(0);
+                this.timer.setTimer(TIMER_BURY, 2200);
+                this.timer.setTimer(TIMER_GAME_INTERACT, 1600);
+            }
+        }
         if (!this.timer.hasTimer(TIMER_GAME_INTERACT) && !api.player.hasTarget() && !this.timer.hasTimer(TIMER_RECENT_MOVING)) {
             let groundItem = api.groundItem.getNearestGroundItemById(this.groundItemIDs, 10);
             if (groundItem) {
@@ -171,11 +182,6 @@ export default class AutoKiller extends BotScript {
         } else if (!this.timer.hasTimer(TIMER_LONG_WAIT_TARGET) && api.player.hasTarget() && !api.player.isInCombat()) {
             api.bot.log('INFO', 'AutoKiller.update', 'attack branch: has target not in combat');
             this.runCombatAttack(api);
-        }
-        if (this.buryBones && !this.timer.hasTimer(TIMER_GAME_INTERACT)) {
-            this.timer.setTimer(TIMER_GAME_INTERACT, 800);
-            api.inventory.getItemById(526)?.interact(0);
-            api.inventory.getItemById(532)?.interact(0);
         }
     }
 
