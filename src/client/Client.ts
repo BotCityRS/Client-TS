@@ -4,6 +4,7 @@ import { stopMidi, setMidiVolume, playMidi } from '#3rdparty/tinymidipcm.js';
 import { ClientCode } from '#/client/ClientCode.js';
 import GameShell from '#/client/GameShell.js';
 import InputTracking from '#/client/InputTracking.js';
+import { CLIENT_BOT_LEGACY_MENU_OPCODES_SORTED } from '#/bot/botLegacyMenuOpcodes.js';
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import MobileKeyboard from '#/client/MobileKeyboard.js';
 import MouseTracking from '#/client/MouseTracking.js';
@@ -8944,23 +8945,7 @@ export class Client extends GameShell {
     ]);
 
     /** Opcodes used by the fork bot API that are not `MiniMenuAction` values; excluded from "unknown opcode" WARN (still no-ops in `doAction` unless aligned upstream). */
-    private static readonly _botLegacyMenuOpcodes: ReadonlySet<number> = new Set<number>([
-        960,
-        728,
-        6,
-        963,
-        602,
-        415,
-        892,
-        947,
-        1175,
-        285,
-        504,
-        364,
-        581,
-        1501,
-        1607
-    ]);
+    private static readonly _botLegacyMenuOpcodes: ReadonlySet<number> = new Set<number>(CLIENT_BOT_LEGACY_MENU_OPCODES_SORTED);
 
     private doAction(optionId: number): void {
         if (optionId < 0) {

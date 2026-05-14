@@ -1,6 +1,6 @@
 
 export default class Timer {
-    private static systemTimer: Timer;
+    private static systemTimer: Timer | undefined;
 
     static TIMER_LOGGING_IN = 'TIMER_LOGGING_IN';
     static TIMER_LOGIN_WAIT = 'TIMER_LOGIN_WAIT';
@@ -14,6 +14,10 @@ export default class Timer {
         this.timerNames = [];
     }
 
+    /** Clears the singleton used by `BotAPI`. Only for unit tests. */
+    static resetSystemTimerForTests(): void {
+        Timer.systemTimer = undefined;
+    }
 
     static SystemTimer() {
         if (this.systemTimer) {

@@ -1,3 +1,4 @@
+import { BOT_MENU_BANK_DEPOSIT_1, BOT_MENU_BANK_DEPOSIT_ALL, BOT_MENU_BANK_DEPOSIT_X } from '../../botLegacyMenuOpcodes.js';
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import { ClientProt } from "#/io/ClientProt.js";
 import type BotAPI from "../BotAPI";
@@ -27,11 +28,11 @@ export default class InvInterfaceItem extends InterfaceItem {
         if (!this.api.bank.isOpen()) {
             return;
         }
-        this.api.doAction(602, this.id, this.slot, this.bankOpenInterfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_1, this.id, this.slot, this.bankOpenInterfaceId);
     }
 
     async deposit(count: number) {
-        this.api.doAction(415, this.id, this.slot, this.bankOpenInterfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_X, this.id, this.slot, this.bankOpenInterfaceId);
         return new Promise<boolean>((res) => {
             const timeout = Date.now() + 4000;
             const interval = setInterval(() => {
@@ -51,6 +52,6 @@ export default class InvInterfaceItem extends InterfaceItem {
     }
 
     depositAll() {
-        this.api.doAction(892, this.id, this.slot, this.bankOpenInterfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_ALL, this.id, this.slot, this.bankOpenInterfaceId);
     }
 }

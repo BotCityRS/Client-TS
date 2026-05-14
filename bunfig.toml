@@ -1,0 +1,2 @@
+[test]
+preload = ["./src/bot/__tests__/test-dom-shim.ts"]

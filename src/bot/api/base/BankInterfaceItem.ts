@@ -1,3 +1,4 @@
+import { BOT_MENU_BANK_DEPOSIT_1, BOT_MENU_BANK_DEPOSIT_ALL, BOT_MENU_BANK_DEPOSIT_X } from '../../botLegacyMenuOpcodes.js';
 import { ClientProt } from "#/io/ClientProt.js";
 import type BotAPI from "../BotAPI";
 import InterfaceItem from "./InterfaceItem";
@@ -8,11 +9,11 @@ export default class BankInterfaceItem extends InterfaceItem {
     }
 
     withdraw1() {
-        this.api.doAction(602, this.id, this.slot, this.interfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_1, this.id, this.slot, this.interfaceId);
     }
 
     async withdraw(count: number) {
-        this.api.doAction(415, this.id, this.slot, this.interfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_X, this.id, this.slot, this.interfaceId);
         return new Promise<boolean>((res) => {
             const timeout = Date.now() + 4000;
             const interval = setInterval(() => {
@@ -32,6 +33,6 @@ export default class BankInterfaceItem extends InterfaceItem {
     }
 
     withdrawAll() {
-        this.api.doAction(892, this.id, this.slot, this.interfaceId);
+        this.api.doAction(BOT_MENU_BANK_DEPOSIT_ALL, this.id, this.slot, this.interfaceId);
     }
 }

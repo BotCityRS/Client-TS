@@ -1,3 +1,4 @@
+import { BOT_MENU_BANK_CLOSE } from '../botLegacyMenuOpcodes.js';
 import BankInterfaceItem from "./base/BankInterfaceItem";
 import ItemContainer from "./base/ItemContainer";
 import BotAPI from "./BotAPI";
@@ -47,7 +48,7 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
 
     close() {
         this.api.bot.log('INFO', 'Bank.close', 'doAction close');
-        this.api.doAction(947, -1, -1, 5384);
+        this.api.doAction(BOT_MENU_BANK_CLOSE, -1, -1, 5384);
     }
 
     async withdraw(id: number, amount: number = 1) {

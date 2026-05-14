@@ -6,7 +6,7 @@ import { assertApi } from '../botApiAssert.js';
 import Utility from '../Utility';
 
 /** Same slot → opcode mapping as `Client.addNpcOptions` for non-attack NPC ops (`op[0]` → OP_NPC1, …). */
-const NPC_OP_SLOT_TO_MENU: readonly number[] = [
+export const BOT_NPC_OP_SLOT_TO_MENU: readonly number[] = [
     MiniMenuAction.OP_NPC1,
     MiniMenuAction.OP_NPC2,
     MiniMenuAction.OP_NPC3,
@@ -23,7 +23,7 @@ function npcAttackMenuOpcode(npc: ClientNpc, localCombatLevel: number | undefine
         if (t.op[i]?.toLowerCase() !== 'attack') {
             continue;
         }
-        const base = NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
+        const base = BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
         let priority = 0;
         if (localCombatLevel !== undefined && t.vislevel > localCombatLevel) {
             priority = MiniMenuAction._PRIORITY;
@@ -104,7 +104,7 @@ export default class ClientNPCEntity {
             return;
         }
         const slot = slots[optionIndex]!;
-        const opcode = NPC_OP_SLOT_TO_MENU[slot] ?? MiniMenuAction.OP_NPC1;
+        const opcode = BOT_NPC_OP_SLOT_TO_MENU[slot] ?? MiniMenuAction.OP_NPC1;
         const { rx, rz } = this.npcInteractParams();
         this.api.bot.log('INFO', 'ClientNPCEntity.interact', 'interact', {
             optionIndex,
@@ -135,7 +135,7 @@ export default class ClientNPCEntity {
                 continue;
             }
             if (o.toLowerCase().includes(lower)) {
-                const opcode = NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
+                const opcode = BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
                 const { rx, rz } = this.npcInteractParams();
                 this.api.bot.log('INFO', 'ClientNPCEntity.interactByOpIncludes', 'matched', { needle, opSlot: i, opcode, verb: o, uid: this.uid, id: this.id });
                 this.api.doAction(opcode, this.uid, rx, rz);

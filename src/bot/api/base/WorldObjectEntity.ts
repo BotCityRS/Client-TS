@@ -1,3 +1,4 @@
+import { BOT_MENU_LOC_EXAMINE, BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES } from '../../botLegacyMenuOpcodes.js';
 import type LocType from "#/config/LocType";
 import type Entity from "#/dash3d/entity/Entity";
 import type BotAPI from "../BotAPI";
@@ -23,11 +24,10 @@ export default class WorldObjectEntity {
     }
 
     interact(optionIndex: number) {
-        const optionIDs = [285, 504, 364, 581, 1501];
-        this.api.doAction(optionIDs[optionIndex], this.typecode, this.x, this.z)
+        this.api.doAction(BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES[optionIndex], this.typecode, this.x, this.z)
     }
 
     examine() {
-        this.api.doAction(1175, this.typecode, this.x, this.z)
+        this.api.doAction(BOT_MENU_LOC_EXAMINE, this.typecode, this.x, this.z)
     }
 }
