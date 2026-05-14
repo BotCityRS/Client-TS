@@ -82,7 +82,7 @@ export default class World {
             timer.defineTimer('IS_WALKING', 0);
 
             walkRef = setInterval(() => {
-                if (n < 0) {
+                if (n < 0 || n >= path.length) {
                     return this.pathCompleteCallback?.(true);
                 }
                 const curNode = path[n];
