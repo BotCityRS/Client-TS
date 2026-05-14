@@ -18,6 +18,7 @@ type BotDebugFlags = {
     itemIds: boolean;
     npcIds: boolean;
     worldObjectIds: boolean;
+    walkTileCoords: boolean;
 };
 
 const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
@@ -40,7 +41,8 @@ export default class Bot {
     private debugFlags: BotDebugFlags = {
         itemIds: false,
         npcIds: false,
-        worldObjectIds: false
+        worldObjectIds: false,
+        walkTileCoords: false
     };
 
     private logLines: string[] = [];
@@ -75,10 +77,11 @@ export default class Bot {
             this.debugFlags = {
                 itemIds: parsed.itemIds === true,
                 npcIds: parsed.npcIds === true,
-                worldObjectIds: parsed.worldObjectIds === true
+                worldObjectIds: parsed.worldObjectIds === true,
+                walkTileCoords: parsed.walkTileCoords === true
             };
         } catch {
-            this.debugFlags = { itemIds: false, npcIds: false, worldObjectIds: false };
+            this.debugFlags = { itemIds: false, npcIds: false, worldObjectIds: false, walkTileCoords: false };
         }
     }
 
@@ -168,6 +171,7 @@ export default class Bot {
         this.bindDebugToggle('botDebugItemIds', 'itemIds');
         this.bindDebugToggle('botDebugNpcIds', 'npcIds');
         this.bindDebugToggle('botDebugWorldObjectIds', 'worldObjectIds');
+        this.bindDebugToggle('botDebugWalkTileCoords', 'walkTileCoords');
 
         const clearBtn = document.getElementById('botLogsClear');
         clearBtn?.addEventListener('click', () => this.clearLogs());

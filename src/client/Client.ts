@@ -86,6 +86,7 @@ type BotDebugFlags = {
     itemIds: boolean;
     npcIds: boolean;
     worldObjectIds: boolean;
+    walkTileCoords: boolean;
 };
 const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
 
@@ -123,6 +124,12 @@ export class Client extends GameShell {
     private debugItemIds: boolean = false;
     private debugNpcIds: boolean = false;
     private debugWorldObjectIds: boolean = false;
+    private debugWalkTileCoords: boolean = false;
+    /** Last sampled ground tile under the cursor (see debug walk-tile picking in gameDrawMain). */
+    private debugMenuWalkTileX: number = -1;
+    private debugMenuWalkTileZ: number = -1;
+    /** True from doAction(WALK) until the next world render consumes the scheduled pick. */
+    private scheduleWalkPickFromMenu: boolean = false;
 
     private hintType: number = 0;
     private hintNpc: number = 0;
@@ -4488,8 +4495,29 @@ export class Client extends GameShell {
         Model.mouseX = this.mouseX - 4;
         Model.mouseY = this.mouseY - 4;
 
+        if (this.debugWalkTileCoords && this.world && !this.scheduleWalkPickFromMenu && this.mouseX > 4 && this.mouseY > 4 && this.mouseX < 516 && this.mouseY < 338) {
+            this.world.updateMousePicking(this.mouseX - 4, this.mouseY - 4);
+        }
+
         Pix2D.cls();
         this.world?.renderAll(this.camX, this.camY, this.camZ, level, this.camYaw, this.camPitch, this.loopCycle);
+
+        if (this.scheduleWalkPickFromMenu) {
+            this.scheduleWalkPickFromMenu = false;
+        } else if (this.debugWalkTileCoords && this.world) {
+            const localX = World.groundX;
+            const localZ = World.groundZ;
+            if (localX >= 0 && localZ >= 0) {
+                // World uses scene-local tile indices; world map tiles match server packets (see tryMove / MAP_CLICK).
+                this.debugMenuWalkTileX = localX + this.mapBuildBaseX;
+                this.debugMenuWalkTileZ = localZ + this.mapBuildBaseZ;
+            } else {
+                this.debugMenuWalkTileX = -1;
+                this.debugMenuWalkTileZ = -1;
+            }
+            World.groundX = -1;
+            World.groundZ = -1;
+        }
         this.world?.removeSprites();
         this.entityOverlays();
         this.coordArrow();
@@ -5265,13 +5293,15 @@ export class Client extends GameShell {
         this.debugItemIds = flags.itemIds;
         this.debugNpcIds = flags.npcIds;
         this.debugWorldObjectIds = flags.worldObjectIds;
+        this.debugWalkTileCoords = flags.walkTileCoords;
     }
 
     private readPersistedDebugFlags(): BotDebugFlags {
         const defaults: BotDebugFlags = {
             itemIds: this.debugItemIds,
             npcIds: this.debugNpcIds,
-            worldObjectIds: this.debugWorldObjectIds
+            worldObjectIds: this.debugWorldObjectIds,
+            walkTileCoords: this.debugWalkTileCoords
         };
         try {
             const raw = localStorage.getItem(BOT_DEBUG_STORAGE_KEY);
@@ -5282,7 +5312,8 @@ export class Client extends GameShell {
             return {
                 itemIds: parsed.itemIds === true || defaults.itemIds,
                 npcIds: parsed.npcIds === true || defaults.npcIds,
-                worldObjectIds: parsed.worldObjectIds === true || defaults.worldObjectIds
+                worldObjectIds: parsed.worldObjectIds === true || defaults.worldObjectIds,
+                walkTileCoords: parsed.walkTileCoords === true || defaults.walkTileCoords
             };
         } catch {
             return defaults;
@@ -5299,6 +5330,16 @@ export class Client extends GameShell {
 
     private debugItemIdSuffix(itemId: number): string {
         return this.readPersistedDebugFlags().itemIds ? ` @cya@[id:${itemId}]@whi@` : '';
+    }
+
+    private debugWalkTileSuffix(): string {
+        if (!this.debugWalkTileCoords) {
+            return '';
+        }
+        if (this.debugMenuWalkTileX < 0 || this.debugMenuWalkTileZ < 0) {
+            return '';
+        }
+        return ` @cya@[world:${this.debugMenuWalkTileX},${this.debugMenuWalkTileZ}]@whi@`;
     }
 
     private getOverlayPos(x: number, z: number, height: number): void {
@@ -9609,6 +9650,7 @@ export class Client extends GameShell {
         }
 
         if (action === MiniMenuAction.WALK) {
+            this.scheduleWalkPickFromMenu = true;
             if (this.isMenuOpen) {
                 this.world?.updateMousePicking(b - 4, c - 4);
             } else {
@@ -9679,7 +9721,7 @@ export class Client extends GameShell {
 
     private addWorldOptions(): void {
         if (this.useMode === 0 && this.targetMode === 0) {
-            this.menuOption[this.menuNumEntries] = 'Walk here';
+            this.menuOption[this.menuNumEntries] = 'Walk here' + this.debugWalkTileSuffix();
             this.menuAction[this.menuNumEntries] = MiniMenuAction.WALK;
             this.menuParamB[this.menuNumEntries] = this.mouseX;
             this.menuParamC[this.menuNumEntries] = this.mouseY;
@@ -10024,7 +10066,7 @@ export class Client extends GameShell {
 
         for (let i: number = 0; i < this.menuNumEntries; i++) {
             if (this.menuAction[i] === MiniMenuAction.WALK) {
-                this.menuOption[i] = 'Walk here @whi@' + tooltip;
+                this.menuOption[i] = 'Walk here' + this.debugWalkTileSuffix() + ' @whi@' + tooltip;
                 break;
             }
         }
