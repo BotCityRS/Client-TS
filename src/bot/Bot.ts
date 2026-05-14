@@ -277,6 +277,9 @@ export default class Bot {
         const name = scriptRegistryKey(script.constructor as new (...args: unknown[]) => unknown);
         this.log('INFO', 'Bot.start', `Script started: ${name}`);
         const tickFunc = () => {
+            if (this.api.isLoggedIn()) {
+                this.api.surface.markClientInputActivity();
+            }
             script.update(this);
         };
         script.start(this);

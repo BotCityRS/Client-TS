@@ -112,6 +112,11 @@ export default class BotScriptingSurface {
         return acc(this.client).out;
     }
 
+    /** Resets the client's 90s idle watchdog (same as DOM input); avoids IDLE_TIMER while bot runs. */
+    markClientInputActivity(): void {
+        this.client.idleTimer = performance.now();
+    }
+
     isBankSidebarOpen(bankRootId: number): boolean {
         const a = acc(this.client);
         return a.sideOverlayId[a.sideTab] === bankRootId;
