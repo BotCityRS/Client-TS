@@ -1,5 +1,7 @@
+import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import { assertApi } from './botApiAssert.js';
 import type BotAPI from './BotAPI';
+import { findAttackStyleButtonComIdFromSidebarSlots } from './combatStyleIfButtons.js';
 
 export default class Player {
     api: BotAPI;
@@ -31,8 +33,8 @@ export default class Player {
     }
 
     enableRun() {
-        this.log('DEBUG', 'Player.enableRun', 'doAction 960 run energy');
-        this.api.doAction(960, 0, 0, 153);
+        this.log('DEBUG', 'Player.enableRun', 'IF_BUTTON run toggle', { comId: 153 });
+        this.api.doAction(MiniMenuAction.IF_BUTTON, 0, 0, 153);
     }
 
     hasTarget() {
@@ -67,11 +69,17 @@ export default class Player {
 
     changeAttackStyle(index: number) {
         assertApi(index >= 0 && index <= 3, this.logFn(), 'Player.changeAttackStyle', 'index must be 0..3', { index });
-        const scim_ids = [2429, 2432, 2431, 2430];
-        const sword_ids = [2282, 2285, 2284, 2283];
-        const param = sword_ids[index];
-        this.log('DEBUG', 'Player.changeAttackStyle', 'doAction', { index, param, scimNote: scim_ids });
-        this.api.doAction(960, 0, 0, param);
+        const tabs = this.api.surface.sidebarTabOverlayRootIds;
+        const comId = findAttackStyleButtonComIdFromSidebarSlots(tabs, index);
+        if (comId === null) {
+            this.log('WARN', 'Player.changeAttackStyle', 'no combat interface in sidebar tabs (logged in / weapon equipped?)', {
+                index,
+                sidebarTabRoots: tabs
+            });
+            return;
+        }
+        this.log('DEBUG', 'Player.changeAttackStyle', 'IF_BUTTON', { index, comId, sidebarTabRoots: tabs });
+        this.api.doAction(MiniMenuAction.IF_BUTTON, 0, 0, comId);
     }
 
     getLevel(skillId: number) {

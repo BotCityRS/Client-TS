@@ -68,6 +68,17 @@ export default class BotScriptingSurface {
         return acc(this.client).mapBuildBaseZ;
     }
 
+    /** Sidebar root component for the active tab (`-1` if none). */
+    get sidebarOverlayRootId(): number {
+        const a = acc(this.client);
+        return a.sideOverlayId[a.sideTab] ?? -1;
+    }
+
+    /** All sidebar tab roots from `IF_SETTAB` (includes combat UI in its slot even when another tab is selected). */
+    get sidebarTabOverlayRootIds(): readonly number[] {
+        return acc(this.client).sideOverlayId.slice();
+    }
+
     get currentLevel(): number {
         return acc(this.client).minusedlevel;
     }

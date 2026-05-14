@@ -9,6 +9,7 @@ const TIMER_RECENT_MOVING = 2;
 const TIMER_ENABLE_RUN = 3;
 const TIMER_LONG_WAIT_TARGET = 4;
 const TIMER_BURY = 5;
+const TIMER_ATTACK_STYLE = 6;
 
 function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
     const field = document.createElement('div');
@@ -70,6 +71,7 @@ export default class AutoKiller extends BotScript {
         this.timer.defineTimer('TIMER_ENABLE_RUN', TIMER_ENABLE_RUN)
         this.timer.defineTimer('TIMER_LONG_WAIT_TARGET', TIMER_LONG_WAIT_TARGET)
         this.timer.defineTimer('TIMER_BURY', TIMER_BURY)
+        this.timer.defineTimer('TIMER_ATTACK_STYLE', TIMER_ATTACK_STYLE)
     }
 
     static htmlSetup(base: HTMLElement) {
@@ -141,14 +143,17 @@ export default class AutoKiller extends BotScript {
             ingame: api.isLoggedIn()
         });
         }
-        api.tryLogin(()=>{
+        api.tryLogin(() => {
             api.player.enableRun();
-            api.player.changeAttackStyle(this.attackStyle);
-            this.timer.setTimer(TIMER_ENABLE_RUN, 90000 + (Math.random() * 60000));
+            this.timer.setTimer(TIMER_ENABLE_RUN, 90000 + Math.random() * 60000);
         });
         if (!this.timer.hasTimer(TIMER_ENABLE_RUN)) {
             api.player.enableRun();
-            this.timer.setTimer(TIMER_ENABLE_RUN, 90000 + (Math.random() * 60000));
+            this.timer.setTimer(TIMER_ENABLE_RUN, 90000 + Math.random() * 60000);
+        }
+        if (!this.timer.hasTimer(TIMER_ATTACK_STYLE)) {
+            api.player.changeAttackStyle(this.attackStyle);
+            this.timer.setTimer(TIMER_ATTACK_STYLE, 12000 + Math.random() * 4000);
         }
         if (api.player.hasTarget()) {
             this.timer.setTimer(TIMER_RECENT_TARGET, 900);
