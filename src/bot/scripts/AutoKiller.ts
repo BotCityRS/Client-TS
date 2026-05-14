@@ -53,6 +53,7 @@ export default class AutoKiller extends BotScript {
     groundItemIDs: number[]
     buryBones: boolean
     timer: Timer;
+    private dbgTick = 0;
 
     constructor(attackStyle: number, npcIDs: number[], groundItemIDs: number[], buryBones: boolean) {
         super('AutoKiller', true)
@@ -118,6 +119,26 @@ export default class AutoKiller extends BotScript {
 
     override update(bot: Bot) {
         let api = bot.api;
+        this.dbgTick++;
+        if (this.dbgTick % 10 === 0) {
+            api.bot.log('DEBUG', 'AutoKiller.update', 'tick', {
+            timers: {
+                gameInteract: this.timer.hasTimer(TIMER_GAME_INTERACT),
+                recentTarget: this.timer.hasTimer(TIMER_RECENT_TARGET),
+                recentMoving: this.timer.hasTimer(TIMER_RECENT_MOVING),
+                enableRun: this.timer.hasTimer(TIMER_ENABLE_RUN),
+                longWaitTarget: this.timer.hasTimer(TIMER_LONG_WAIT_TARGET)
+            },
+            player: {
+                hasTarget: api.player.hasTarget(),
+                isMoving: api.player.isMoving(),
+                isInCombat: api.player.isInCombat(),
+                isAnimating: api.player.isAnimating()
+            },
+            npcIds: this.npcIDs,
+            ingame: api.isLoggedIn()
+        });
+        }
         api.tryLogin(()=>{
             api.player.enableRun();
             api.player.changeAttackStyle(this.attackStyle);
@@ -139,14 +160,17 @@ export default class AutoKiller extends BotScript {
         if (!this.timer.hasTimer(TIMER_GAME_INTERACT) && !api.player.hasTarget() && !this.timer.hasTimer(TIMER_RECENT_MOVING)) {
             let groundItem = api.groundItem.getNearestGroundItemById(this.groundItemIDs, 10);
             if (groundItem) {
+                api.bot.log('INFO', 'AutoKiller.update', 'pickup ground item', { id: groundItem.id });
                 groundItem.pickUp();
                 this.timer.setTimer(TIMER_GAME_INTERACT, 1200);
             }
         }
         if (!this.timer.hasTimer(TIMER_GAME_INTERACT) && !this.timer.hasTimer(TIMER_RECENT_TARGET) && !this.timer.hasTimer(TIMER_RECENT_MOVING)) {
-            this.attack(api);
+            api.bot.log('INFO', 'AutoKiller.update', 'attack branch: idle');
+            this.runCombatAttack(api);
         } else if (!this.timer.hasTimer(TIMER_LONG_WAIT_TARGET) && api.player.hasTarget() && !api.player.isInCombat()) {
-            this.attack(api);
+            api.bot.log('INFO', 'AutoKiller.update', 'attack branch: has target not in combat');
+            this.runCombatAttack(api);
         }
         if (this.buryBones && !this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             this.timer.setTimer(TIMER_GAME_INTERACT, 800);
@@ -155,9 +179,15 @@ export default class AutoKiller extends BotScript {
         }
     }
 
-    attack(api: BotAPI) {
+    private runCombatAttack(api: BotAPI) {
         const ids = this.npcIDs;
-        api.npc.getNPCByIdsNearest(ids, false)?.attack();
+        const target = api.npc.getNPCByIdsNearest(ids, false);
+        if (!target) {
+            api.bot.log('WARN', 'AutoKiller.runCombatAttack', 'no NPC in range for ids', { ids });
+        } else {
+            api.bot.log('INFO', 'AutoKiller.runCombatAttack', 'attacking', { uid: target.uid, id: target.id, dist: target.playerDist });
+            target.attack();
+        }
         this.timer.setTimer(TIMER_LONG_WAIT_TARGET, 6500);
         this.timer.setTimer(TIMER_GAME_INTERACT, 2500);
     }

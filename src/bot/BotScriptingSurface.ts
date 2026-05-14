@@ -5,6 +5,7 @@ import type ClientPlayer from '#/dash3d/ClientPlayer.js';
 import type World from '#/dash3d/World.js';
 import LinkList from '#/datastruct/LinkList.js';
 import type Packet from '#/io/Packet.js';
+import type { BotLogFn } from '#/bot/BotLog.js';
 
 /**
  * Typed escape hatch for private `Client` fields used by scripting.
@@ -42,7 +43,10 @@ function acc(c: Client): ClientAccess {
 }
 
 export default class BotScriptingSurface {
-    constructor(private readonly client: Client) {}
+    constructor(
+        private readonly client: Client,
+        private readonly botLog?: BotLogFn
+    ) {}
 
     get ingame(): boolean {
         return acc(this.client).ingame;
@@ -114,6 +118,7 @@ export default class BotScriptingSurface {
     }
 
     setMenuSlot(opcode: number, p1: number, p2: number, p3: number): void {
+        this.botLog?.('DEBUG', 'BotScriptingSurface.setMenuSlot', 'menu slot 0', { opcode, p1, p2, p3 });
         const a = acc(this.client);
         a.menuOption[0] = '';
         a.menuAction[0] = opcode;
@@ -124,10 +129,12 @@ export default class BotScriptingSurface {
     }
 
     runDoAction(optionId: number): void {
+        this.botLog?.('DEBUG', 'BotScriptingSurface.runDoAction', 'dispatch', { optionId });
         (this.client as unknown as { doAction(i: number): void }).doAction(optionId);
     }
 
     tryMoveToTile(srcX: number, srcZ: number, destX: number, destZ: number): boolean {
+        this.botLog?.('DEBUG', 'BotScriptingSurface.tryMoveToTile', 'tryMove', { srcX, srcZ, destX, destZ });
         return (this.client as unknown as { tryMove(a: number, b: number, c: number, d: number, tryNearest: boolean, lw: number, ll: number, la: number, ls: number, fa: number, ty: number): boolean }).tryMove(
             srcX,
             srcZ,
@@ -144,6 +151,7 @@ export default class BotScriptingSurface {
     }
 
     async login(username: string, password: string, reconnect: boolean): Promise<void> {
+        this.botLog?.('INFO', 'BotScriptingSurface.login', 'login attempt', { username, reconnect });
         await (this.client as unknown as { login(u: string, p: string, r: boolean): Promise<void> }).login(username, password, reconnect);
     }
 
@@ -158,6 +166,6 @@ export default class BotScriptingSurface {
     }
 }
 
-export function createBotSurface(client: Client): BotScriptingSurface {
-    return new BotScriptingSurface(client);
+export function createBotSurface(client: Client, botLog?: BotLogFn): BotScriptingSurface {
+    return new BotScriptingSurface(client, botLog);
 }

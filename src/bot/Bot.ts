@@ -1,4 +1,5 @@
 import type { Client } from '#/client/Client.js';
+import type { BotLogLevel } from './BotLog.js';
 import BotAPI from './api/BotAPI';
 import AutoFisher from './scripts/AutoFisher';
 import AutoKiller from './scripts/AutoKiller';
@@ -6,6 +7,7 @@ import AutoWalker from './scripts/AutoWalker';
 import BotScript from './scripts/BotScript';
 import LumbyThievSuicide from './scripts/LumbyThievSuicide';
 import ScriptLoader from './scripts/ScriptLoader';
+import { formatDetail } from './api/botApiAssert.js';
 
 /** Script list key: constructor `name` (preserved by bundle + Terser `keep_classnames`). */
 function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
@@ -20,6 +22,8 @@ type BotDebugFlags = {
 
 const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
 
+const MAX_LOG_LINES = 4000;
+
 export default class Bot {
     client: Client;
 
@@ -32,12 +36,14 @@ export default class Bot {
 
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
-    private activeTab: 'script' | 'debug' = 'script';
+    private activeTab: 'script' | 'debug' | 'logs' = 'script';
     private debugFlags: BotDebugFlags = {
         itemIds: false,
         npcIds: false,
         worldObjectIds: false
     };
+
+    private logLines: string[] = [];
 
     private setSummary(text: string) {
         const summary = document.getElementById('botScriptSummary');
@@ -76,17 +82,61 @@ export default class Bot {
         }
     }
 
-    private setTab(tab: 'script' | 'debug') {
+    private flushLogTextarea() {
+        const ta = document.getElementById('botLogsArea') as HTMLTextAreaElement | null;
+        if (!ta) {
+            return;
+        }
+        const wasAtEnd = ta.scrollTop + ta.clientHeight >= ta.scrollHeight - 8;
+        ta.value = this.logLines.join('\n');
+        if (wasAtEnd) {
+            ta.scrollTop = ta.scrollHeight;
+        }
+    }
+
+    /** Session-only bot / script / client diagnostics (also mirrored to console on WARN+). */
+    log(level: BotLogLevel, source: string, message: string, detail?: unknown): void {
+        const ts = new Date().toISOString();
+        const extra = formatDetail(detail);
+        const line = `[${ts}] [${level}] [${source}] ${message}${extra ? ` | ${extra}` : ''}`;
+        this.logLines.push(line);
+        while (this.logLines.length > MAX_LOG_LINES) {
+            this.logLines.shift();
+        }
+        this.flushLogTextarea();
+        if (level === 'WARN' || level === 'ERROR') {
+            console.warn(line);
+        } else if (level === 'INFO') {
+            console.info(line);
+        } else {
+            console.debug(line);
+        }
+    }
+
+    clearLogs(): void {
+        this.logLines = [];
+        this.flushLogTextarea();
+    }
+
+    isScriptRunning(): boolean {
+        return this.currentScript !== null;
+    }
+
+    private setTab(tab: 'script' | 'debug' | 'logs') {
         this.activeTab = tab;
         const scriptButton = document.getElementById('botTabScript');
         const debugButton = document.getElementById('botTabDebug');
+        const logsButton = document.getElementById('botTabLogs');
         const scriptPanel = document.getElementById('bot-script-panel');
         const debugPanel = document.getElementById('bot-debug-panel');
+        const logsPanel = document.getElementById('bot-logs-panel');
 
         scriptButton?.classList.toggle('bot-tab-active', tab === 'script');
         debugButton?.classList.toggle('bot-tab-active', tab === 'debug');
+        logsButton?.classList.toggle('bot-tab-active', tab === 'logs');
         scriptPanel?.classList.toggle('bot-panel-active', tab === 'script');
         debugPanel?.classList.toggle('bot-panel-active', tab === 'debug');
+        logsPanel?.classList.toggle('bot-panel-active', tab === 'logs');
     }
 
     private bindDebugToggle(id: string, key: keyof BotDebugFlags) {
@@ -109,13 +159,18 @@ export default class Bot {
 
         const scriptButton = document.getElementById('botTabScript');
         const debugButton = document.getElementById('botTabDebug');
+        const logsButton = document.getElementById('botTabLogs');
         scriptButton?.addEventListener('click', () => this.setTab('script'));
         debugButton?.addEventListener('click', () => this.setTab('debug'));
+        logsButton?.addEventListener('click', () => this.setTab('logs'));
         this.setTab(this.activeTab);
 
         this.bindDebugToggle('botDebugItemIds', 'itemIds');
         this.bindDebugToggle('botDebugNpcIds', 'npcIds');
         this.bindDebugToggle('botDebugWorldObjectIds', 'worldObjectIds');
+
+        const clearBtn = document.getElementById('botLogsClear');
+        clearBtn?.addEventListener('click', () => this.clearLogs());
     }
 
     constructor(client: Client) {
@@ -219,6 +274,8 @@ export default class Bot {
     start(script: BotScript) {
         this.stop();
         this.currentScript = script;
+        const name = scriptRegistryKey(script.constructor as new (...args: unknown[]) => unknown);
+        this.log('INFO', 'Bot.start', `Script started: ${name}`);
         const tickFunc = () => {
             script.update(this);
         };
@@ -228,7 +285,13 @@ export default class Bot {
     }
 
     stop() {
-        this.currentScript?.stop(this);
+        const script = this.currentScript;
+        if (script) {
+            const name = scriptRegistryKey(script.constructor as new (...args: unknown[]) => unknown);
+            script.stop(this);
+            this.log('INFO', 'Bot.stop', `Script stopped: ${name}`);
+        }
+        this.currentScript = null;
         clearInterval(this.intervalHandle);
         console.info('Script stopped.');
     }

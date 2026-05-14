@@ -51,6 +51,8 @@ export default class World {
         const nodeDist = 5;
         const movement = traverse ? 1 : -1;
 
+        this.api.bot.log('INFO', 'World.walkPath', 'start', { traverse, nodes: path.length });
+
         const findNearestNode: (path: Path) => number = (path: Path) => {
             let nearestI = -1;
             let nearDist = Number.MAX_SAFE_INTEGER;
@@ -86,7 +88,7 @@ export default class World {
                 const curNode = path[n];
                 let tries = 10;
                 const dist = this.api.world.distanceTo(curNode[0], curNode[1]);
-                console.info('dist:', dist);
+                this.api.bot.log('DEBUG', 'World.walkPath', 'tick', { dist, nodeIndex: n, curNode, isMoving: this.api.player.isMoving() });
                 if ((dist > nodeDist && this.api.player.isMoving()) || timer.hasTimer(0) || tries < 0) {
                     if (dist > 100 || tries < 0) {
                         this.pathCompleteCallback?.(false);

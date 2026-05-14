@@ -1,5 +1,5 @@
-import type BotAPI from "./BotAPI";
-import Timer from "./Timer";
+import { assertApi } from './botApiAssert.js';
+import type BotAPI from './BotAPI';
 
 export default class Player {
     api: BotAPI;
@@ -14,6 +14,14 @@ export default class Player {
         this.isInCombatScore = 0;
     }
 
+    private log(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', source: string, message: string, detail?: unknown): void {
+        this.api.bot.log(level, source, message, detail);
+    }
+
+    private logFn() {
+        return (level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', source: string, message: string, detail?: unknown) => this.api.bot.log(level, source, message, detail);
+    }
+
     getLocalX() {
         return this.api.surface.localPlayer?.routeX[0] ?? -1;
     }
@@ -23,6 +31,7 @@ export default class Player {
     }
 
     enableRun() {
+        this.log('DEBUG', 'Player.enableRun', 'doAction 960 run energy');
         this.api.doAction(960, 0, 0, 153);
     }
 
@@ -40,6 +49,7 @@ export default class Player {
         if (this.isInCombatScore != lp.combatCycle) {
             this.lastCombatUpdate = now;
             this.isInCombatScore = lp.combatCycle;
+            this.log('DEBUG', 'Player.isInCombat', 'combatCycle changed', { combatCycle: lp.combatCycle });
         }
         if (now >= this.lastCombatUpdate + 2800) {
             return false;
@@ -56,9 +66,12 @@ export default class Player {
     }
 
     changeAttackStyle(index: number) {
+        assertApi(index >= 0 && index <= 3, this.logFn(), 'Player.changeAttackStyle', 'index must be 0..3', { index });
         const scim_ids = [2429, 2432, 2431, 2430];
         const sword_ids = [2282, 2285, 2284, 2283];
-        this.api.doAction(960, 0, 0, sword_ids[index]);
+        const param = sword_ids[index];
+        this.log('DEBUG', 'Player.changeAttackStyle', 'doAction', { index, param, scimNote: scim_ids });
+        this.api.doAction(960, 0, 0, param);
     }
 
     getLevel(skillId: number) {

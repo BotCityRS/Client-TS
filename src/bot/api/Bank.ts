@@ -37,13 +37,16 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
     open() {
         const bankBooth = this.api.worldObject.getNearestById([2213]);
         if (!bankBooth) {
+            this.api.bot.log('WARN', 'Bank.open', 'no bank booth world object id 2213 nearby');
             return false;
         }
+        this.api.bot.log('INFO', 'Bank.open', 'interact booth');
         bankBooth.interact(1);
         return true;
     }
 
     close() {
+        this.api.bot.log('INFO', 'Bank.close', 'doAction close');
         this.api.doAction(947, -1, -1, 5384);
     }
 

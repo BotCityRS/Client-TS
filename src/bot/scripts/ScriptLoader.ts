@@ -100,7 +100,7 @@ export default class ScriptLoader extends BotScript {
 
         const startScript = createScriptArea('startScript', '');
 
-        const updateScript = createScriptArea('updateScript', 'console.info(\'isanim: \', bot.api.player.isAnimating());');
+        const updateScript = createScriptArea('updateScript', "bot.log('DEBUG', 'userScript.update', 'tick', { isAnimating: bot.api.player.isAnimating() });");
 
         const endScript = createScriptArea('endScript', '');
 
@@ -143,7 +143,8 @@ export default class ScriptLoader extends BotScript {
     static createScriptClass(className: string, startScript: string, updateScript: string, endScript: string, htmlSetupScript: string, buildFromHtmlScript: string) {
         const safeName = JSON.stringify(className);
         const classIdentifier = toClassIdentifier(className);
-        return new Function('BotScript', 'startCode', 'updateCode', 'stopCode', 'htmlSetupCode', 'buildFromHtmlCode', `
+        try {
+            return new Function('BotScript', 'startCode', 'updateCode', 'stopCode', 'htmlSetupCode', 'buildFromHtmlCode', `
             return class ${classIdentifier} extends BotScript {
                 constructor() {
                     super(${safeName}, false);
@@ -156,6 +157,15 @@ export default class ScriptLoader extends BotScript {
                 static buildFromHtml = new Function('base', buildFromHtmlCode);
             }
         `)(BotScript, startScript, updateScript, endScript, htmlSetupScript, buildFromHtmlScript);
+        } catch (err) {
+            (globalThis as unknown as { bot?: { log: (l: 'ERROR', s: string, m: string, d?: unknown) => void } }).bot?.log(
+                'ERROR',
+                'ScriptLoader.createScriptClass',
+                'Failed to compile custom script',
+                { className, message: err instanceof Error ? err.message : String(err) }
+            );
+            throw err;
+        }
     }
 
     static buildFromHtml(_base: HTMLElement) {

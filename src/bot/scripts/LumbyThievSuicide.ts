@@ -69,6 +69,7 @@ export default class LumbyThievSuicide extends BotScript {
 
     update(bot: Bot) {
         let api = bot.api;
+        api.bot.log('DEBUG', 'LumbyThievSuicide.update', 'tick', { hasInteractTimer: this.timer.hasTimer(TIMER_GAME_INTERACT), pickupCoins: this.pickupCoins });
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }

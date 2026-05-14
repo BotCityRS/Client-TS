@@ -1,16 +1,17 @@
-import type Bot from "../Bot";
-import BotScriptingSurface, { createBotSurface } from "../BotScriptingSurface";
-import Bank from "./Bank";
-import Equipment from "./Equipment";
-import GroundItem from "./GroundItem";
-import Interface from "./Interface";
-import Inventory from "./Inventory";
-import NPC from "./NPC";
-import Player from "./Player";
-import Timer from "./Timer";
-import Utility from "./Utility";
-import World from "./World";
-import WorldObject from "./WorldObject";
+import type Bot from '../Bot.js';
+import BotScriptingSurface, { createBotSurface } from '../BotScriptingSurface.js';
+import { assertApi } from './botApiAssert.js';
+import Bank from './Bank';
+import Equipment from './Equipment';
+import GroundItem from './GroundItem';
+import Interface from './Interface';
+import Inventory from './Inventory';
+import NPC from './NPC';
+import Player from './Player';
+import Timer from './Timer';
+import Utility from './Utility';
+import World from './World';
+import WorldObject from './WorldObject';
 
 export default class BotAPI {
     bot: Bot;
@@ -30,7 +31,8 @@ export default class BotAPI {
 
     constructor(bot: Bot) {
         this.bot = bot;
-        this.surface = createBotSurface(bot.client);
+        const log = (level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', source: string, message: string, detail?: unknown) => this.bot.log(level, source, message, detail);
+        this.surface = createBotSurface(bot.client, log);
 
         this.util = new Utility();
         this.interface = new Interface();
@@ -45,11 +47,29 @@ export default class BotAPI {
         this.systemTimer = Timer.SystemTimer();
     }
 
+    private log(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', source: string, message: string, detail?: unknown): void {
+        this.bot.log(level, source, message, detail);
+    }
+
     setMenuOptions(menuOption: number, p1: number, p2: number, p3: number) {
+        this.log('DEBUG', 'BotAPI.setMenuOptions', 'setMenuOptions', { menuOption, p1, p2, p3 });
         this.surface.setMenuSlot(menuOption, p1, p2, p3);
     }
 
     async doAction(menuOption: number, p1: number, p2: number, p3: number) {
+        const logFn = this.log.bind(this) as Parameters<typeof assertApi>[1];
+        assertApi(
+            Number.isFinite(menuOption) && Number.isFinite(p1) && Number.isFinite(p2) && Number.isFinite(p3),
+            logFn,
+            'BotAPI.doAction',
+            'Non-finite menu opcode or params',
+            { menuOption, p1, p2, p3 }
+        );
+        if (!this.isLoggedIn()) {
+            this.log('DEBUG', 'BotAPI.doAction', 'not ingame; action may be ignored', { menuOption, p1, p2, p3 });
+        }
+
+        this.log('INFO', 'BotAPI.doAction', 'issue', { menuOption, p1, p2, p3 });
         this.setMenuOptions(menuOption, p1, p2, p3);
         this.surface.runDoAction(0);
     }
@@ -62,17 +82,28 @@ export default class BotAPI {
         const TIMER_LOGGING_IN = 0;
         const TIMER_LOGIN_WAIT = 1;
         const TIMER_SETUP_ACCOUNT_ON_LOGIN = 2;
+        const ingame = this.isLoggedIn();
+        this.log('DEBUG', 'BotAPI.tryLogin', 'tick', {
+            ingame,
+            hasLoggingIn: this.systemTimer.hasTimer(TIMER_LOGGING_IN),
+            hasLoginWait: this.systemTimer.hasTimer(TIMER_LOGIN_WAIT),
+            hasSetup: this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)
+        });
+
         if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
             this.systemTimer.setTimer(TIMER_LOGGING_IN, 6000);
             this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3000);
+            this.log('INFO', 'BotAPI.tryLogin', 'started login timers');
             return;
         }
         if (this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
             if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGIN_WAIT)) {
+                this.log('INFO', 'BotAPI.tryLogin', 'calling surface.login');
                 void this.surface.login(this.surface.loginUsername, this.surface.loginPassword, true);
                 this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3001);
             }
             if (this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)) {
+                this.log('INFO', 'BotAPI.tryLogin', 'ingame; running onSuccess');
                 onSuccess();
                 this.systemTimer.setTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN, 3000);
             }

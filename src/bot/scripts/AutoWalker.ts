@@ -125,6 +125,7 @@ export default class AutoWalker extends BotScript {
 
     override update(bot: Bot) {
         let api = bot.api;
+        api.bot.log('DEBUG', 'AutoWalker.update', 'tick', { path: this.path.label, traverse: this.traverse });
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }

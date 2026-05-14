@@ -67,6 +67,16 @@ export default class GroundItem {
                 nearestItem = groundItems[i];
             }
         }
+        if (nearestItem) {
+            this.api.bot.log('DEBUG', 'GroundItem.getNearestGroundItemById', 'picked', {
+                ids,
+                maxDist,
+                id: nearestItem.id,
+                x: nearestItem.x,
+                z: nearestItem.z,
+                playerDist: nearestItem.playerDist
+            });
+        }
         return nearestItem;
     };
 }

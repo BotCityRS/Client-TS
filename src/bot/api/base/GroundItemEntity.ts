@@ -19,6 +19,7 @@ export default class GroundItemEntity {
     }
 
     pickUp() {
+        this.api.bot.log('INFO', 'GroundItemEntity.pickUp', 'pickUp', { id: this.id, x: this.x, z: this.z });
         this.api.doAction(99, this.id, this.x, this.z);
     }
 }

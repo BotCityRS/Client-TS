@@ -142,6 +142,7 @@ export default class AutoFisher extends BotScript {
 
     override async update(bot: Bot) {
         let api = bot.api;
+        api.bot.log('DEBUG', 'AutoFisher.update', 'tick', { hasInteractTimer: this.timer.hasTimer(TIMER_GAME_INTERACT) });
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }

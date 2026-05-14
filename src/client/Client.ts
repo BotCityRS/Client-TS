@@ -8829,6 +8829,104 @@ export class Client extends GameShell {
         return action === MiniMenuAction.FRIENDLIST_ADD;
     }
 
+    private tryBotLog(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', source: string, message: string, detail?: unknown): void {
+        (globalThis as unknown as { bot?: { log(l: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', s: string, m: string, d?: unknown): void } }).bot?.log(level, source, message, detail);
+    }
+
+    private botScriptRunning(): boolean {
+        return (globalThis as unknown as { bot?: { isScriptRunning?: () => boolean } }).bot?.isScriptRunning?.() === true;
+    }
+
+    /** Normalized `MiniMenuAction` ids (excludes `_PRIORITY` itself). Used to detect bogus bot-injected opcodes. */
+    private static readonly _botMiniMenuNormalizedIds: ReadonlySet<number> = new Set<number>([
+        MiniMenuAction.TGT_LOC,
+        MiniMenuAction.OP_LOC1,
+        MiniMenuAction.OP_LOC2,
+        MiniMenuAction.OP_LOC3,
+        MiniMenuAction.OP_LOC4,
+        MiniMenuAction.OP_LOC5,
+        MiniMenuAction.USEHELD_ONLOC,
+        MiniMenuAction.TGT_NPC,
+        MiniMenuAction.OP_NPC1,
+        MiniMenuAction.OP_NPC2,
+        MiniMenuAction.OP_NPC3,
+        MiniMenuAction.OP_NPC4,
+        MiniMenuAction.OP_NPC5,
+        MiniMenuAction.USEHELD_ONNPC,
+        MiniMenuAction.TGT_OBJ,
+        MiniMenuAction.OP_OBJ1,
+        MiniMenuAction.OP_OBJ2,
+        MiniMenuAction.OP_OBJ3,
+        MiniMenuAction.OP_OBJ4,
+        MiniMenuAction.OP_OBJ5,
+        MiniMenuAction.USEHELD_ONOBJ,
+        MiniMenuAction.TGT_PLAYER,
+        MiniMenuAction.OP_PLAYER1,
+        MiniMenuAction.ACCEPT_DUELREQ,
+        MiniMenuAction.OP_PLAYER2,
+        MiniMenuAction.OP_PLAYER3,
+        MiniMenuAction.OP_PLAYER4,
+        MiniMenuAction.ACCEPT_TRADEREQ,
+        MiniMenuAction.OP_PLAYER5,
+        MiniMenuAction.USEHELD_ONPLAYER,
+        MiniMenuAction.TGT_HELD,
+        MiniMenuAction.OP_HELD1,
+        MiniMenuAction.OP_HELD2,
+        MiniMenuAction.OP_HELD3,
+        MiniMenuAction.OP_HELD4,
+        MiniMenuAction.OP_HELD5,
+        MiniMenuAction.USEHELD_ONHELD,
+        MiniMenuAction.INV_BUTTON1,
+        MiniMenuAction.INV_BUTTON2,
+        MiniMenuAction.INV_BUTTON3,
+        MiniMenuAction.INV_BUTTON4,
+        MiniMenuAction.INV_BUTTON5,
+        MiniMenuAction.WALK,
+        MiniMenuAction.IF_BUTTON,
+        MiniMenuAction.TGT_BUTTON,
+        MiniMenuAction.CLOSE_BUTTON,
+        MiniMenuAction.TOGGLE_BUTTON,
+        MiniMenuAction.SELECT_BUTTON,
+        MiniMenuAction.PAUSE_BUTTON,
+        MiniMenuAction.USEHELD_START,
+        MiniMenuAction.OP_LOC6,
+        MiniMenuAction.OP_NPC6,
+        MiniMenuAction.OP_OBJ6,
+        MiniMenuAction.OP_HELD6,
+        MiniMenuAction.CANCEL,
+        MiniMenuAction.ABUSE_REPORT,
+        MiniMenuAction.FRIENDLIST_ADD,
+        MiniMenuAction.IGNORELIST_ADD,
+        MiniMenuAction.FRIENDLIST_DEL,
+        MiniMenuAction.IGNORELIST_DEL,
+        MiniMenuAction.MESSAGE_PRIVATE
+    ]);
+
+    /** Opcodes used by the fork bot API that are not `MiniMenuAction` values; excluded from "unknown opcode" WARN (still no-ops in `doAction` unless aligned upstream). */
+    private static readonly _botLegacyMenuOpcodes: ReadonlySet<number> = new Set<number>([
+        960,
+        728,
+        6,
+        963,
+        602,
+        415,
+        892,
+        947,
+        347,
+        99,
+        1175,
+        285,
+        504,
+        364,
+        581,
+        1501,
+        405,
+        38,
+        422,
+        1607,
+        99
+    ]);
+
     private doAction(optionId: number): void {
         if (optionId < 0) {
             return;
@@ -8846,6 +8944,17 @@ export class Client extends GameShell {
 
         if (action >= MiniMenuAction._PRIORITY) {
             action -= MiniMenuAction._PRIORITY;
+        }
+
+        if (this.botScriptRunning()) {
+            this.tryBotLog('DEBUG', 'Client.doAction', 'dispatch', {
+                optionId,
+                rawMenuAction: this.menuAction[optionId],
+                normalizedAction: action,
+                a,
+                b,
+                c
+            });
         }
 
         if (action === MiniMenuAction.OP_OBJ1 || action === MiniMenuAction.OP_OBJ2 || action === MiniMenuAction.OP_OBJ3 || action === MiniMenuAction.OP_OBJ4 || action === MiniMenuAction.OP_OBJ5) {
@@ -8992,6 +9101,13 @@ export class Client extends GameShell {
                 }
 
                 this.out.p2(a);
+            } else if (this.botScriptRunning()) {
+                this.tryBotLog('WARN', 'Client.doAction', 'OP_NPC1..5 had no effect (missing npc index or localPlayer)', {
+                    action,
+                    npcSlot: a,
+                    hasNpc: npc != null,
+                    hasLocalPlayer: this.localPlayer != null
+                });
             }
         }
 
@@ -9549,6 +9665,17 @@ export class Client extends GameShell {
                     this.socialInputHeader = 'Enter message to send to ' + this.friendUsername[friend];
                 }
             }
+        }
+
+        if (!Client._botMiniMenuNormalizedIds.has(action) && !Client._botLegacyMenuOpcodes.has(action)) {
+            this.tryBotLog('WARN', 'Client.doAction', 'Unknown normalized menu action (not in MiniMenuAction set); likely no packet', {
+                optionId,
+                rawMenuAction: this.menuAction[optionId],
+                normalizedAction: action,
+                a,
+                b,
+                c
+            });
         }
 
         this.useMode = 0;
