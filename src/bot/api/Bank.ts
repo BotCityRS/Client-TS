@@ -32,6 +32,7 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
 
     onClose() {
         this.api.inventory.interfaceId = 3214;
+        this.depositScanCursor = 0;
     }
 
     isOpen() {
@@ -66,13 +67,27 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
     }
 
     depositAllExcept(ids: number[]) {
+        const keep = ids.filter(id => id >= 0);
         this.onOpen();
         for (let s = 0; s < this.api.inventory.getContainerSize(); ++s) {
             const item = this.api.inventory.getItemBySlot(s);
-            if (item && !ids.includes(item.id)) {
-                item?.depositAll();
+            if (item && !keep.includes(item.id)) {
+                item.depositAll();
             }
         }
+    }
+
+    /** True if any inventory stack is not listed in `keepIds` (ignores negative ids). */
+    hasDepositableItems(keepIds: number[]): boolean {
+        const keep = keepIds.filter(id => id >= 0);
+        const size = this.api.inventory.getContainerSize();
+        for (let s = 0; s < size; s++) {
+            const item = this.api.inventory.getItemBySlot(s);
+            if (item && !keep.includes(item.id)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

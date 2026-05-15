@@ -33,6 +33,32 @@ type TreeKind = 'normal' | 'oak' | 'willow';
 
 type LogAction = 'none' | 'drop' | 'burn' | 'shafts' | 'shortbow' | 'longbow';
 
+type FletchProduct = 'shafts' | 'shortbow' | 'longbow';
+
+/** Matches `stat.constant`. */
+const STAT_FIREMAKING = 17;
+const STAT_WOODCUTTING = 18;
+const STAT_FLETCHING = 19;
+
+const WC_LEVEL_FOR_TREE: Record<TreeKind, number> = {
+    normal: 0,
+    oak: 15,
+    willow: 30
+};
+
+const FM_LEVEL_FOR_LOG: Record<number, number> = {
+    [ID_LOGS]: 1,
+    [ID_OAK_LOGS]: 15,
+    [ID_WILLOW_LOGS]: 30
+};
+
+/** From `skill_fletching/configs/cut_logs/cut_logs.dbrow`. */
+const FLETCH_LEVEL_FOR_LOG: Record<number, Partial<Record<FletchProduct, number>>> = {
+    [ID_LOGS]: { shafts: 1, shortbow: 5, longbow: 10 },
+    [ID_OAK_LOGS]: { shortbow: 20, longbow: 25 },
+    [ID_WILLOW_LOGS]: { shortbow: 35, longbow: 40 }
+};
+
 /** Loc type ids from `skill_woodcutting` tree tables / `loc.pack`. */
 const TREE_LOC_IDS: Record<TreeKind, readonly number[]> = {
     normal: [
@@ -207,6 +233,113 @@ function wantsFletchOnLog(logId: number, cutShafts: boolean, cutShortbow: boolea
     return (logId === ID_OAK_LOGS || logId === ID_WILLOW_LOGS) && (cutShortbow || cutLongbow);
 }
 
+function fletchLevelRequired(logId: number, product: FletchProduct): number | null {
+    return FLETCH_LEVEL_FOR_LOG[logId]?.[product] ?? null;
+}
+
+function canFletchLog(api: Bot['api'], logId: number, action: LogAction): boolean {
+    const level = api.player.getLevel(STAT_FLETCHING);
+    if (action === 'shafts') {
+        const req = fletchLevelRequired(logId, 'shafts');
+        return req !== null && level >= req;
+    }
+    if (action === 'shortbow') {
+        const req = fletchLevelRequired(logId, 'shortbow');
+        return req !== null && level >= req;
+    }
+    if (action === 'longbow') {
+        const req = fletchLevelRequired(logId, 'longbow');
+        return req !== null && level >= req;
+    }
+    return false;
+}
+
+function canBurnLog(api: Bot['api'], logId: number): boolean {
+    const req = FM_LEVEL_FOR_LOG[logId];
+    return req !== undefined && api.player.getLevel(STAT_FIREMAKING) >= req;
+}
+
+function pickBurnableLogId(api: Bot['api']): number | null {
+    const order = [ID_WILLOW_LOGS, ID_OAK_LOGS, ID_LOGS];
+    for (let i = 0; i < order.length; i++) {
+        const logId = order[i]!;
+        if (api.inventory.hasItem(logId) && canBurnLog(api, logId)) {
+            return logId;
+        }
+    }
+    return null;
+}
+
+function resolveEffectiveTreeKind(api: Bot['api'], requested: TreeKind): TreeKind {
+    const wc = api.player.getLevel(STAT_WOODCUTTING);
+    if (requested === 'willow' && wc < WC_LEVEL_FOR_TREE.willow) {
+        return wc >= WC_LEVEL_FOR_TREE.oak ? 'oak' : 'normal';
+    }
+    if (requested === 'oak' && wc < WC_LEVEL_FOR_TREE.oak) {
+        return 'normal';
+    }
+    return requested;
+}
+
+function fallbackLogAction(bankEnabled: boolean): LogAction {
+    return bankEnabled ? 'none' : 'drop';
+}
+
+function resolveEffectiveLogAction(
+    api: Bot['api'],
+    action: LogAction,
+    treeKind: TreeKind,
+    bankEnabled: boolean
+): LogAction {
+    if (action === 'none' || action === 'drop') {
+        return action;
+    }
+
+    const fl = api.player.getLevel(STAT_FLETCHING);
+    const fm = api.player.getLevel(STAT_FIREMAKING);
+
+    if (action === 'burn') {
+        if (canBurnLog(api, logIdForTreeKind(treeKind))) {
+            return 'burn';
+        }
+        if (pickBurnableLogId(api) !== null) {
+            return 'burn';
+        }
+        return fallbackLogAction(bankEnabled);
+    }
+
+    if (action === 'shafts') {
+        if (fl >= (fletchLevelRequired(ID_LOGS, 'shafts') ?? 99)) {
+            return 'shafts';
+        }
+        return fallbackLogAction(bankEnabled);
+    }
+
+    const logId = logIdForTreeKind(treeKind);
+
+    if (action === 'shortbow') {
+        const req = fletchLevelRequired(logId, 'shortbow');
+        if (req !== null && fl >= req) {
+            return 'shortbow';
+        }
+        return fallbackLogAction(bankEnabled);
+    }
+
+    if (action === 'longbow') {
+        const longReq = fletchLevelRequired(logId, 'longbow');
+        const shortReq = fletchLevelRequired(logId, 'shortbow');
+        if (longReq !== null && fl >= longReq) {
+            return 'longbow';
+        }
+        if (shortReq !== null && fl >= shortReq) {
+            return 'shortbow';
+        }
+        return fallbackLogAction(bankEnabled);
+    }
+
+    return action;
+}
+
 function parseLogAction(raw: string): LogAction {
     if (raw === 'none' || raw === 'drop' || raw === 'burn' || raw === 'shafts' || raw === 'shortbow' || raw === 'longbow') {
         return raw;
@@ -288,6 +421,7 @@ export default class AutoWoodcutter extends BotScript {
     private burnFireTileZ = -1;
     private burnWaitStartedAt = 0;
     private fletchDialogAt = 0;
+    private levelFallbackKey = '';
 
     static spots: WoodSpot[] = [
         {
@@ -497,10 +631,39 @@ export default class AutoWoodcutter extends BotScript {
         return new AutoWoodcutter(spot, bank, treeKind, logAction);
     }
 
-    private beginKnifeFletch(api: Bot['api'], logId: number): boolean {
+    private logLevelFallback(
+        api: Bot['api'],
+        requestedTree: TreeKind,
+        effectiveTree: TreeKind,
+        requestedAction: LogAction,
+        effectiveAction: LogAction
+    ): void {
+        const key = `${requestedTree}>${effectiveTree}|${requestedAction}>${effectiveAction}`;
+        if (key === this.levelFallbackKey) {
+            return;
+        }
+        this.levelFallbackKey = key;
+        if (requestedTree === effectiveTree && requestedAction === effectiveAction) {
+            return;
+        }
+        api.bot.log('INFO', 'AutoWoodcutter.update', 'level fallback', {
+            requestedTree,
+            effectiveTree,
+            requestedAction,
+            effectiveAction,
+            woodcutting: api.player.getLevel(STAT_WOODCUTTING),
+            fletching: api.player.getLevel(STAT_FLETCHING),
+            firemaking: api.player.getLevel(STAT_FIREMAKING)
+        });
+    }
+
+    private beginKnifeFletch(api: Bot['api'], logId: number, logAction: LogAction): boolean {
+        if (!canFletchLog(api, logId, logAction)) {
+            return false;
+        }
         const knife = api.inventory.getItemById(ID_KNIFE);
         const log = api.inventory.getItemById(logId);
-        const fletch = fletchFlagsForAction(this.logAction);
+        const fletch = fletchFlagsForAction(logAction);
         const com = pickDialogCom(logId, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow);
         if (!knife || !log || com === null) {
             return false;
@@ -514,7 +677,7 @@ export default class AutoWoodcutter extends BotScript {
     }
 
     private beginBurnLog(api: Bot['api'], logId: number): boolean {
-        if (isStandingOnFire(api)) {
+        if (isStandingOnFire(api) || !canBurnLog(api, logId)) {
             return false;
         }
         const tinder = api.inventory.getItemById(ID_TINDERBOX);
@@ -623,9 +786,18 @@ export default class AutoWoodcutter extends BotScript {
             return;
         }
 
-        const fletch = fletchFlagsForAction(this.logAction);
+        const chopTreeKindForLevel = this.bankEnabled && this.spot ? this.spot.treeKind : this.treeKind;
+        const effectiveTreeKind = resolveEffectiveTreeKind(api, chopTreeKindForLevel);
+        const effectiveLogAction = resolveEffectiveLogAction(api, this.logAction, effectiveTreeKind, this.bankEnabled);
+        if (!this.bankEnabled || !this.spot) {
+            this.logLevelFallback(api, this.treeKind, effectiveTreeKind, this.logAction, effectiveLogAction);
+        } else if (effectiveLogAction !== this.logAction) {
+            this.logLevelFallback(api, this.treeKind, this.spot.treeKind, this.logAction, effectiveLogAction);
+        }
+
+        const fletch = fletchFlagsForAction(effectiveLogAction);
         const fletchEnabled = fletch.cutShafts || fletch.cutShortbow || fletch.cutLongbow;
-        if (!this.bankEnabled && (this.logAction === 'shortbow' || this.logAction === 'longbow')) {
+        if (!this.bankEnabled && (effectiveLogAction === 'shortbow' || effectiveLogAction === 'longbow')) {
             if (dropOneUnstrungBow(api)) {
                 this.timer.setTimer(TIMER_GAME_INTERACT, 600);
                 return;
@@ -635,34 +807,49 @@ export default class AutoWoodcutter extends BotScript {
         const logIds = [ID_LOGS, ID_OAK_LOGS, ID_WILLOW_LOGS];
         for (let li = 0; li < logIds.length; li++) {
             const lid = logIds[li]!;
-            if (!api.inventory.hasItem(lid) || !wantsFletchOnLog(lid, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow)) {
+            if (
+                !api.inventory.hasItem(lid) ||
+                !wantsFletchOnLog(lid, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow) ||
+                !canFletchLog(api, lid, effectiveLogAction)
+            ) {
                 continue;
             }
             if (!api.inventory.hasItem(ID_KNIFE)) {
                 break;
             }
-            if (this.beginKnifeFletch(api, lid)) {
+            if (this.beginKnifeFletch(api, lid, effectiveLogAction)) {
                 return;
             }
         }
 
-        if (!this.bankEnabled && this.logAction === 'burn' && api.inventory.hasItem(ID_TINDERBOX) && !isStandingOnFire(api)) {
-            const burnLogId = logIdForTreeKind(this.treeKind);
-            if (api.inventory.hasItem(burnLogId) && this.beginBurnLog(api, burnLogId)) {
+        if (
+            !this.bankEnabled &&
+            effectiveLogAction === 'burn' &&
+            api.inventory.hasItem(ID_TINDERBOX) &&
+            !isStandingOnFire(api)
+        ) {
+            const burnLogId = pickBurnableLogId(api);
+            if (burnLogId !== null && this.beginBurnLog(api, burnLogId)) {
                 return;
             }
         }
 
-        if (!this.bankEnabled && this.logAction === 'drop' && api.inventory.isFull()) {
-            if (dropOneUnstrungBow(api) || dropOneLogForSpace(api, this.treeKind)) {
+        if (!this.bankEnabled && effectiveLogAction === 'drop' && api.inventory.isFull()) {
+            if (dropOneUnstrungBow(api) || dropOneLogForSpace(api, effectiveTreeKind)) {
                 this.timer.setTimer(TIMER_GAME_INTERACT, 600);
                 return;
             }
         }
 
         const needsKnifeForFletch = fletchEnabled && hasAnyFletchLog(api) && !api.inventory.hasItem(ID_KNIFE);
+        const keepWhenBanking = [...AutoWoodcutter.keepWhenBanking];
+        const hasItemsToDeposit = api.bank.hasDepositableItems(keepWhenBanking);
         const needBank =
-            this.bankEnabled && (api.inventory.isFull() || !hasAnyAxe(api) || needsKnifeForFletch);
+            this.bankEnabled &&
+            (api.inventory.isFull() ||
+                !hasAnyAxe(api) ||
+                needsKnifeForFletch ||
+                (api.bank.isOpen() && hasItemsToDeposit));
 
         if (needBank && this.spot) {
             if (!api.bank.isOpen()) {
@@ -673,7 +860,8 @@ export default class AutoWoodcutter extends BotScript {
                 return;
             }
 
-            if (api.bank.depositOneIfNotKept([...AutoWoodcutter.keepWhenBanking])) {
+            if (hasItemsToDeposit) {
+                api.bank.depositAllExcept(keepWhenBanking);
                 this.timer.setTimer(TIMER_GAME_INTERACT, 780);
                 return;
             }
@@ -692,7 +880,8 @@ export default class AutoWoodcutter extends BotScript {
         if (!api.player.isAnimating()) {
             this.timer.setTimer(TIMER_GAME_INTERACT, 2000);
             const anchor = this.spot?.anchor ?? null;
-            const tree = findChoppableTree(api, this.treeKind, this.bankEnabled, anchor, 14);
+            const chopTreeKind = this.bankEnabled && this.spot ? this.spot.treeKind : effectiveTreeKind;
+            const tree = findChoppableTree(api, chopTreeKind, this.bankEnabled, anchor, 14);
             if (tree) {
                 tree.interact(0);
             } else if (this.bankEnabled && this.spot && api.world.distanceTo(this.spot.anchor[0], this.spot.anchor[1]) > 8) {
