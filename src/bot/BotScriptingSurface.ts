@@ -138,7 +138,6 @@ export default class BotScriptingSurface {
     }
 
     setMenuSlot(opcode: number, p1: number, p2: number, p3: number): void {
-        this.botLog?.('DEBUG', 'BotScriptingSurface.setMenuSlot', 'menu slot 0', { opcode, p1, p2, p3 });
         const a = acc(this.client);
         a.menuOption[0] = '';
         a.menuAction[0] = opcode;
@@ -149,12 +148,10 @@ export default class BotScriptingSurface {
     }
 
     runDoAction(optionId: number): void {
-        this.botLog?.('DEBUG', 'BotScriptingSurface.runDoAction', 'dispatch', { optionId });
         (this.client as unknown as { doAction(i: number): void }).doAction(optionId);
     }
 
     tryMoveToTile(srcX: number, srcZ: number, destX: number, destZ: number): boolean {
-        this.botLog?.('DEBUG', 'BotScriptingSurface.tryMoveToTile', 'tryMove', { srcX, srcZ, destX, destZ });
         return (this.client as unknown as { tryMove(a: number, b: number, c: number, d: number, tryNearest: boolean, lw: number, ll: number, la: number, ls: number, fa: number, ty: number): boolean }).tryMove(
             srcX,
             srcZ,

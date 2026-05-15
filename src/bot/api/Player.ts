@@ -33,7 +33,6 @@ export default class Player {
     }
 
     enableRun() {
-        this.log('DEBUG', 'Player.enableRun', 'IF_BUTTON run toggle', { comId: 153 });
         this.api.doAction(MiniMenuAction.IF_BUTTON, 0, 0, 153);
     }
 
@@ -51,7 +50,6 @@ export default class Player {
         if (this.isInCombatScore != lp.combatCycle) {
             this.lastCombatUpdate = now;
             this.isInCombatScore = lp.combatCycle;
-            this.log('DEBUG', 'Player.isInCombat', 'combatCycle changed', { combatCycle: lp.combatCycle });
         }
         if (now >= this.lastCombatUpdate + 2800) {
             return false;
@@ -78,7 +76,6 @@ export default class Player {
             });
             return;
         }
-        this.log('DEBUG', 'Player.changeAttackStyle', 'IF_BUTTON', { index, comId, sidebarTabRoots: tabs });
         this.api.doAction(MiniMenuAction.IF_BUTTON, 0, 0, comId);
     }
 

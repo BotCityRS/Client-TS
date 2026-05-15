@@ -44,7 +44,6 @@ export default class NPC {
                 orderedNPCs.push(npcs[i]);
             }
         }
-        this.log('DEBUG', 'NPC.getAllByIds', 'filtered', { ids, includeInCombat, count: orderedNPCs.length, totalSeen: npcs.length });
         return orderedNPCs;
     }
 
@@ -60,7 +59,6 @@ export default class NPC {
                 npcs.push(n);
             }
         }
-        this.log('DEBUG', 'NPC.getNPCByIdsNearest', 'filtered', { ids, includeInCombat, matched: npcs.length, sceneTotal: allWrappers.length });
         let nearestNPC: ClientNPCEntity | null = null;
         for (let i = 0; i < npcs.length; ++i) {
             if (!nearestNPC || npcs[i].playerDist < nearestNPC.playerDist) {
@@ -75,11 +73,6 @@ export default class NPC {
                 sceneTypeIdsSample: allWrappers.slice(0, 12).map(n => n.id)
             });
         }
-        this.log('INFO', 'NPC.getNPCByIdsNearest', nearestNPC ? 'picked' : 'none', {
-            ids,
-            includeInCombat,
-            choice: nearestNPC ? { uid: nearestNPC.uid, id: nearestNPC.id, playerDist: nearestNPC.playerDist } : null
-        });
         return nearestNPC;
     }
 
@@ -94,7 +87,6 @@ export default class NPC {
                 nearestNPC = npcs[i];
             }
         }
-        this.log('DEBUG', 'NPC.getNPCByIdsNearestIf', 'result', { ids, found: nearestNPC != null });
         return nearestNPC;
     }
 }

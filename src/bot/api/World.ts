@@ -105,7 +105,6 @@ export default class World {
                 }
                 const curNode = path[n]!;
                 const dist = this.api.world.distanceTo(curNode[0], curNode[1]);
-                this.api.bot.log('DEBUG', 'World.walkPath', 'tick', { dist, nodeIndex: n, curNode, isMoving: this.api.player.isMoving() });
                 if (dist > nodeDist && this.api.player.isMoving()) {
                     return;
                 }

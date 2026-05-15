@@ -52,7 +52,6 @@ export default class BotAPI {
     }
 
     setMenuOptions(menuOption: number, p1: number, p2: number, p3: number) {
-        this.log('DEBUG', 'BotAPI.setMenuOptions', 'setMenuOptions', { menuOption, p1, p2, p3 });
         this.surface.setMenuSlot(menuOption, p1, p2, p3);
     }
 
@@ -65,11 +64,6 @@ export default class BotAPI {
             'Non-finite menu opcode or params',
             { menuOption, p1, p2, p3 }
         );
-        if (!this.isLoggedIn()) {
-            this.log('DEBUG', 'BotAPI.doAction', 'not ingame; action may be ignored', { menuOption, p1, p2, p3 });
-        }
-
-        this.log('INFO', 'BotAPI.doAction', 'issue', { menuOption, p1, p2, p3 });
         this.setMenuOptions(menuOption, p1, p2, p3);
         this.surface.runDoAction(0);
     }
@@ -82,14 +76,6 @@ export default class BotAPI {
         const TIMER_LOGGING_IN = 0;
         const TIMER_LOGIN_WAIT = 1;
         const TIMER_SETUP_ACCOUNT_ON_LOGIN = 2;
-        const ingame = this.isLoggedIn();
-        this.log('DEBUG', 'BotAPI.tryLogin', 'tick', {
-            ingame,
-            hasLoggingIn: this.systemTimer.hasTimer(TIMER_LOGGING_IN),
-            hasLoginWait: this.systemTimer.hasTimer(TIMER_LOGIN_WAIT),
-            hasSetup: this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)
-        });
-
         if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
             this.systemTimer.setTimer(TIMER_LOGGING_IN, 6000);
             this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3000);

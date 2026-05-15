@@ -8966,17 +8966,6 @@ export class Client extends GameShell {
             action -= MiniMenuAction._PRIORITY;
         }
 
-        if (this.botScriptRunning()) {
-            this.tryBotLog('DEBUG', 'Client.doAction', 'dispatch', {
-                optionId,
-                rawMenuAction: this.menuAction[optionId],
-                normalizedAction: action,
-                a,
-                b,
-                c
-            });
-        }
-
         if (action === MiniMenuAction.OP_OBJ1 || action === MiniMenuAction.OP_OBJ2 || action === MiniMenuAction.OP_OBJ3 || action === MiniMenuAction.OP_OBJ4 || action === MiniMenuAction.OP_OBJ5) {
             if (this.localPlayer) {
                 const success: boolean = this.tryMove(this.localPlayer.routeX[0], this.localPlayer.routeZ[0], b, c, false, 0, 0, 0, 0, 0, 2);
