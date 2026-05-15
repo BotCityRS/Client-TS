@@ -9,13 +9,19 @@ import BotScript from './BotScript';
 const TIMER_GAME_INTERACT = 0;
 const TIMER_ENABLE_RUN = 1;
 const TIMER_KNIFE_USE = 2;
+const TIMER_TINDER_USE = 3;
 
 const ID_KNIFE = 946;
+const ID_TINDERBOX = 590;
+const ID_FIRE_LOC = 2732;
 const ID_LOGS = 1511;
 const ID_OAK_LOGS = 1521;
 const ID_WILLOW_LOGS = 1519;
 
 const AXE_IDS = [1349, 1351, 1353, 1355, 1357, 1359, 1361] as const;
+
+/** Unstrung bows from knife fletching (`obj.pack`). */
+const UNSTRUNG_BOW_IDS = [841, 839, 843, 845, 849, 847] as const;
 
 const MULTIOBJ3_SHAFT = 2800;
 const MULTIOBJ3_SHORT = 2801;
@@ -24,6 +30,19 @@ const MULTIOBJ2_SHORT = 142;
 const MULTIOBJ2_LONG = 143;
 
 type TreeKind = 'normal' | 'oak' | 'willow';
+
+type LogAction = 'none' | 'drop' | 'burn' | 'shafts' | 'shortbow' | 'longbow';
+
+/** Loc type ids from `skill_woodcutting` tree tables / `loc.pack`. */
+const TREE_LOC_IDS: Record<TreeKind, readonly number[]> = {
+    normal: [
+        1276, 1277, 1278, 1279, 1280, // tree, lighttree, tree2, tree3, lighttree2
+        1282, 1283, 1284, 1285, 1286, 1289, 1290, 1291, // dead / snowy variants in normal table
+        1315, 1316, 1318, 1319, 1330, 1331, 1332, 1365
+    ],
+    oak: [1281],
+    willow: [1308]
+};
 
 type WoodSpot = {
     label: string;
@@ -51,6 +70,7 @@ function createField(container: HTMLElement, label: string, input: HTMLElement, 
     }
 
     container.appendChild(field);
+    return field;
 }
 
 function getSelectNumber(id: string, fallback: number): number {
@@ -63,36 +83,10 @@ function getChecked(id: string): boolean {
     return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
 }
 
-function hasChopOp(loc: WorldObjectEntity['locType']): boolean {
-    const ops = loc.op;
-    if (!ops) {
-        return false;
-    }
-    for (let i = 0; i < ops.length; i++) {
-        const o = ops[i];
-        if (o && o.toLowerCase().includes('chop')) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function treeKindMatches(displayName: string | null, kind: TreeKind): boolean {
-    if (!displayName) {
-        return false;
-    }
-    if (kind === 'normal') {
-        return displayName === 'Tree';
-    }
-    if (kind === 'oak') {
-        return displayName === 'Oak';
-    }
-    return displayName === 'Willow';
-}
-
 function hasAnyAxe(api: Bot['api']): boolean {
     for (let i = 0; i < AXE_IDS.length; i++) {
-        if (api.inventory.hasItem(AXE_IDS[i]!)) {
+        const axeId = AXE_IDS[i]!;
+        if (api.inventory.hasItem(axeId) || api.equipment.hasItem(axeId)) {
             return true;
         }
     }
@@ -103,29 +97,65 @@ function hasAnyFletchLog(api: Bot['api']): boolean {
     return api.inventory.hasItem(ID_LOGS) || api.inventory.hasItem(ID_OAK_LOGS) || api.inventory.hasItem(ID_WILLOW_LOGS);
 }
 
-function findChoppableTree(api: Bot['api'], spot: WoodSpot, bankEnabled: boolean, anchorMaxDist: number): WorldObjectEntity | null {
-    const objs = api.worldObject.getAll();
+function hasFireAtTile(api: Bot['api'], tileX: number, tileZ: number): boolean {
+    const fires = api.worldObject.getById([ID_FIRE_LOC]);
+    for (let i = 0; i < fires.length; i++) {
+        const fire = fires[i]!;
+        if (fire.x === tileX && fire.z === tileZ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isStandingOnFire(api: Bot['api']): boolean {
+    const px = api.player.getLocalX();
+    const pz = api.player.getLocalZ();
+    if (px < 0 || pz < 0) {
+        return false;
+    }
+    return hasFireAtTile(api, px, pz);
+}
+
+function isFiremakingComplete(api: Bot['api'], fireTileX: number, fireTileZ: number): boolean {
+    if (fireTileX >= 0 && fireTileZ >= 0 && hasFireAtTile(api, fireTileX, fireTileZ)) {
+        return true;
+    }
+    return isStandingOnFire(api);
+}
+
+const BURN_FIRE_WAIT_MS = 16000;
+
+const TREE_PATHFIND_MAX_STEPS = 100;
+
+function findChoppableTree(
+    api: Bot['api'],
+    treeKind: TreeKind,
+    bankEnabled: boolean,
+    anchor: [number, number] | null,
+    anchorMaxDist: number
+): WorldObjectEntity | null {
+    const candidates = api.worldObject.getById([...TREE_LOC_IDS[treeKind]]);
     let best: WorldObjectEntity | null = null;
-    let bestD = Number.POSITIVE_INFINITY;
+    let bestSteps = Number.POSITIVE_INFINITY;
     const baseX = api.surface.sceneBaseTileX;
     const baseZ = api.surface.sceneBaseTileZ;
-    const ax = spot.anchor[0];
-    const az = spot.anchor[1];
-    for (let i = 0; i < objs.length; i++) {
-        const wo = objs[i]!;
-        if (!hasChopOp(wo.locType) || !treeKindMatches(wo.locType.name, spot.treeKind)) {
-            continue;
-        }
-        if (bankEnabled) {
+    for (let i = 0; i < candidates.length; i++) {
+        const wo = candidates[i]!;
+        if (bankEnabled && anchor) {
             const wx = wo.x + baseX;
             const wz = wo.z + baseZ;
-            const da = Utility.getDistance(wx, wz, ax, az);
+            const da = Utility.getDistance(wx, wz, anchor[0], anchor[1]);
             if (da > anchorMaxDist) {
                 continue;
             }
         }
-        if (wo.playerDist < bestD) {
-            bestD = wo.playerDist;
+        const steps = api.worldObject.getPathfindSteps(wo);
+        if (steps < 0 || steps > TREE_PATHFIND_MAX_STEPS) {
+            continue;
+        }
+        if (steps < bestSteps) {
+            bestSteps = steps;
             best = wo;
         }
     }
@@ -162,6 +192,14 @@ function pickDialogCom(
     return null;
 }
 
+function fletchFlagsForAction(action: LogAction): { cutShafts: boolean; cutShortbow: boolean; cutLongbow: boolean } {
+    return {
+        cutShafts: action === 'shafts',
+        cutShortbow: action === 'shortbow',
+        cutLongbow: action === 'longbow'
+    };
+}
+
 function wantsFletchOnLog(logId: number, cutShafts: boolean, cutShortbow: boolean, cutLongbow: boolean): boolean {
     if (logId === ID_LOGS) {
         return cutShafts || cutShortbow || cutLongbow;
@@ -169,17 +207,86 @@ function wantsFletchOnLog(logId: number, cutShafts: boolean, cutShortbow: boolea
     return (logId === ID_OAK_LOGS || logId === ID_WILLOW_LOGS) && (cutShortbow || cutLongbow);
 }
 
+function parseLogAction(raw: string): LogAction {
+    if (raw === 'none' || raw === 'drop' || raw === 'burn' || raw === 'shafts' || raw === 'shortbow' || raw === 'longbow') {
+        return raw;
+    }
+    return 'none';
+}
+
+function defaultLogActionForBanking(banking: boolean): LogAction {
+    return banking ? 'none' : 'drop';
+}
+
+function sanitizeLogAction(action: LogAction, banking: boolean): LogAction {
+    const opt = AutoWoodcutter.logActionOptions.find(o => o.value === action);
+    if (banking) {
+        if (action === 'drop' || action === 'burn' || opt?.requiresNoBank) {
+            return 'none';
+        }
+        return action;
+    }
+    if (action === 'none' || opt?.requiresBank) {
+        return 'drop';
+    }
+    return action;
+}
+
+function dropOneUnstrungBow(api: Bot['api']): boolean {
+    for (let i = 0; i < UNSTRUNG_BOW_IDS.length; i++) {
+        const item = api.inventory.getItemById(UNSTRUNG_BOW_IDS[i]!);
+        if (item) {
+            item.drop();
+            return true;
+        }
+    }
+    return false;
+}
+
+function dropOneLogForSpace(api: Bot['api'], treeKind: TreeKind): boolean {
+    const preferred = logIdForTreeKind(treeKind);
+    let item = api.inventory.getItemById(preferred);
+    if (!item) {
+        const logIds = [ID_LOGS, ID_OAK_LOGS, ID_WILLOW_LOGS];
+        for (let i = 0; i < logIds.length; i++) {
+            item = api.inventory.getItemById(logIds[i]!);
+            if (item) {
+                break;
+            }
+        }
+    }
+    if (!item) {
+        return false;
+    }
+    item.drop();
+    return true;
+}
+
+function logIdForTreeKind(kind: TreeKind): number {
+    if (kind === 'oak') {
+        return ID_OAK_LOGS;
+    }
+    if (kind === 'willow') {
+        return ID_WILLOW_LOGS;
+    }
+    return ID_LOGS;
+}
+
 export default class AutoWoodcutter extends BotScript {
     timer: Timer;
 
-    spot: WoodSpot;
+    spot: WoodSpot | null;
+    treeKind: TreeKind;
     bankEnabled: boolean;
-    cutShafts: boolean;
-    cutShortbow: boolean;
-    cutLongbow: boolean;
+    logAction: LogAction;
 
     private knifeUseStep: 'idle' | 'need_use_on_log' = 'idle';
+    private tinderUseStep: 'idle' | 'need_use_on_log' | 'awaiting_fire' = 'idle';
     private pendingDialogCom: number | null = null;
+    private pendingBurnLogId: number | null = null;
+    private burnFireTileX = -1;
+    private burnFireTileZ = -1;
+    private burnWaitStartedAt = 0;
     private fletchDialogAt = 0;
 
     static spots: WoodSpot[] = [
@@ -215,34 +322,77 @@ export default class AutoWoodcutter extends BotScript {
         }
     ];
 
-    static keepWhenBanking: readonly number[] = [ID_KNIFE, ...AXE_IDS];
+    static treeKindOptions: { label: string; kind: TreeKind }[] = [
+        { label: 'Tree (normal logs)', kind: 'normal' },
+        { label: 'Oak', kind: 'oak' },
+        { label: 'Willow', kind: 'willow' }
+    ];
 
-    constructor(
-        spotIndex: number,
-        bankEnabled: boolean,
-        cutShafts: boolean,
-        cutShortbow: boolean,
-        cutLongbow: boolean
-    ) {
+    static logActionOptions: { value: LogAction; label: string; hint: string; requiresBank?: boolean; requiresNoBank?: boolean }[] = [
+        {
+            value: 'none',
+            label: 'None (chop only)',
+            hint: 'Only woodcut; the bank stores logs and products.',
+            requiresBank: true
+        },
+        {
+            value: 'drop',
+            label: 'Drop logs',
+            hint: 'Drops logs when inventory is full (no banking). Prefers logs matching the selected tree type.',
+            requiresNoBank: true
+        },
+        {
+            value: 'burn',
+            label: 'Burn logs',
+            hint: 'Uses a tinderbox on logs matching the selected tree type (no banking).',
+            requiresNoBank: true
+        },
+        {
+            value: 'shafts',
+            label: 'Arrow shafts',
+            hint: 'Knife on normal logs (members fletching dialog). Withdraws a knife from the bank when banking.'
+        },
+        {
+            value: 'shortbow',
+            label: 'Shortbows (unstrung)',
+            hint: 'Knife fletching dialog for your log type. Withdraws a knife from the bank when banking.'
+        },
+        {
+            value: 'longbow',
+            label: 'Longbows (unstrung)',
+            hint: 'Knife fletching dialog for your log type. Withdraws a knife from the bank when banking.'
+        }
+    ];
+
+    static keepWhenBanking: readonly number[] = [ID_KNIFE, ID_TINDERBOX, ...AXE_IDS];
+
+    constructor(spotIndex = 0, bankEnabled = false, treeKindIndex = 0, logAction: LogAction = 'none') {
         super('AutoWoodcutter', true);
         this.timer = new Timer();
-        const i = Math.max(0, Math.min(spotIndex, AutoWoodcutter.spots.length - 1));
-        this.spot = AutoWoodcutter.spots[i]!;
         this.bankEnabled = bankEnabled;
-        this.cutShafts = cutShafts;
-        this.cutShortbow = cutShortbow;
-        this.cutLongbow = cutLongbow;
+        this.logAction = logAction;
+
+        if (bankEnabled) {
+            const i = Math.max(0, Math.min(spotIndex, AutoWoodcutter.spots.length - 1));
+            this.spot = AutoWoodcutter.spots[i]!;
+            this.treeKind = this.spot.treeKind;
+        } else {
+            this.spot = null;
+            const ki = Math.max(0, Math.min(treeKindIndex, AutoWoodcutter.treeKindOptions.length - 1));
+            this.treeKind = AutoWoodcutter.treeKindOptions[ki]!.kind;
+        }
 
         this.timer.defineTimer('TIMER_GAME_INTERACT', TIMER_GAME_INTERACT);
         this.timer.defineTimer('TIMER_ENABLE_RUN', TIMER_ENABLE_RUN);
         this.timer.defineTimer('TIMER_KNIFE_USE', TIMER_KNIFE_USE);
+        this.timer.defineTimer('TIMER_TINDER_USE', TIMER_TINDER_USE);
     }
 
     static htmlSetup(base: HTMLElement) {
         const desc = document.createElement('p');
         desc.className = 'bot-description';
         desc.textContent =
-            'Woodcuts near the chosen spot, optionally fletches logs with a knife, and optionally banks. Requires a hatchet and (for fletching) a knife.';
+            'Woodcuts trees near you or at a preset spot. Choose what to do with logs: chop only, burn, or fletch. Banking deposits products and can withdraw tools.';
         base.appendChild(desc);
 
         const elemBank = document.createElement('input');
@@ -250,20 +400,8 @@ export default class AutoWoodcutter extends BotScript {
         elemBank.type = 'checkbox';
         elemBank.className = 'bot-checkbox';
 
-        const elemShafts = document.createElement('input');
-        elemShafts.id = 'awcShafts';
-        elemShafts.type = 'checkbox';
-        elemShafts.className = 'bot-checkbox';
-
-        const elemShort = document.createElement('input');
-        elemShort.id = 'awcShort';
-        elemShort.type = 'checkbox';
-        elemShort.className = 'bot-checkbox';
-
-        const elemLong = document.createElement('input');
-        elemLong.id = 'awcLong';
-        elemLong.type = 'checkbox';
-        elemLong.className = 'bot-checkbox';
+        const elemLogAction = document.createElement('select');
+        elemLogAction.id = 'awcLogAction';
 
         const elemLocation = document.createElement('select');
         elemLocation.id = 'awcSpot';
@@ -275,32 +413,95 @@ export default class AutoWoodcutter extends BotScript {
             elemLocation.appendChild(option);
         });
 
-        const syncLocationDisabled = () => {
-            elemLocation.disabled = !elemBank.checked;
-        };
-        elemBank.addEventListener('change', syncLocationDisabled);
-        syncLocationDisabled();
+        const elemTreeKind = document.createElement('select');
+        elemTreeKind.id = 'awcTreeKind';
 
-        createField(base, 'Bank logs / bows', elemBank, 'When on, walks the route to bank, deposits, and returns. Enables the tree area dropdown.');
-        createField(base, 'Tree area (when banking)', elemLocation, 'Pick the grove that matches the logs you want.');
-        createField(base, 'Cut plain logs into arrow shafts', elemShafts, 'Normal logs only (members fletching dialog).');
-        createField(base, 'Cut logs into shortbows (unstrung)', elemShort, 'Uses the fletching choice dialog for your log type.');
-        createField(base, 'Cut logs into longbows (unstrung)', elemLong, 'Uses the fletching choice dialog for your log type.');
+        AutoWoodcutter.treeKindOptions.forEach((opt, idx) => {
+            const option = document.createElement('option');
+            option.value = String(idx);
+            option.textContent = opt.label;
+            elemTreeKind.appendChild(option);
+        });
+
+        createField(base, 'Bank logs / bows', elemBank, 'Walks to the bank, deposits, and returns to the grove.');
+
+        const fieldSpot = createField(
+            base,
+            'Tree area (when banking)',
+            elemLocation,
+            'Preset grove and bank route. Withdraws a bronze hatchet from the bank if you have none.'
+        );
+        const fieldTreeKind = createField(
+            base,
+            'Tree type (no banking)',
+            elemTreeKind,
+            'Chops the nearest tree of this type wherever you are.'
+        );
+
+        const logActionHint = document.createElement('small');
+        logActionHint.className = 'bot-hint';
+        logActionHint.id = 'awcLogActionHint';
+
+        const fieldLogAction = createField(base, 'Log processing', elemLogAction);
+        fieldLogAction.appendChild(logActionHint);
+
+        let bankModeWasEnabled = elemBank.checked;
+        let logActionUiInitialized = false;
+
+        const populateLogActionOptions = (banking: boolean, resetDefault: boolean) => {
+            const prev = parseLogAction(elemLogAction.value);
+            elemLogAction.replaceChildren();
+            for (let i = 0; i < AutoWoodcutter.logActionOptions.length; i++) {
+                const opt = AutoWoodcutter.logActionOptions[i]!;
+                if (banking && opt.requiresNoBank) {
+                    continue;
+                }
+                if (!banking && opt.requiresBank) {
+                    continue;
+                }
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label;
+                elemLogAction.appendChild(option);
+            }
+            const next = resetDefault ? defaultLogActionForBanking(banking) : sanitizeLogAction(prev, banking);
+            elemLogAction.value = next;
+            const selected = AutoWoodcutter.logActionOptions.find(o => o.value === elemLogAction.value);
+            logActionHint.textContent = selected?.hint ?? '';
+        };
+
+        elemLogAction.addEventListener('change', () => {
+            const selected = AutoWoodcutter.logActionOptions.find(o => o.value === elemLogAction.value);
+            logActionHint.textContent = selected?.hint ?? '';
+        });
+
+        const syncBankMode = () => {
+            const bank = elemBank.checked;
+            const bankToggled = bank !== bankModeWasEnabled;
+            fieldSpot.style.display = bank ? '' : 'none';
+            fieldTreeKind.style.display = bank ? 'none' : '';
+            populateLogActionOptions(bank, !logActionUiInitialized || bankToggled);
+            logActionUiInitialized = true;
+            bankModeWasEnabled = bank;
+        };
+        elemBank.addEventListener('change', syncBankMode);
+        syncBankMode();
     }
 
     static buildFromHtml(_base: HTMLElement) {
         const spot = getSelectNumber('awcSpot', 0);
         const bank = getChecked('awcBank');
-        const shafts = getChecked('awcShafts');
-        const shortb = getChecked('awcShort');
-        const longb = getChecked('awcLong');
-        return new AutoWoodcutter(spot, bank, shafts, shortb, longb);
+        const treeKind = getSelectNumber('awcTreeKind', 0);
+        const logActionRaw = (document.getElementById('awcLogAction') as HTMLSelectElement | null)?.value ?? 'none';
+        const logAction = sanitizeLogAction(parseLogAction(logActionRaw), bank);
+        return new AutoWoodcutter(spot, bank, treeKind, logAction);
     }
 
     private beginKnifeFletch(api: Bot['api'], logId: number): boolean {
         const knife = api.inventory.getItemById(ID_KNIFE);
         const log = api.inventory.getItemById(logId);
-        const com = pickDialogCom(logId, this.cutShafts, this.cutShortbow, this.cutLongbow);
+        const fletch = fletchFlagsForAction(this.logAction);
+        const com = pickDialogCom(logId, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow);
         if (!knife || !log || com === null) {
             return false;
         }
@@ -308,6 +509,23 @@ export default class AutoWoodcutter extends BotScript {
         this.knifeUseStep = 'need_use_on_log';
         void api.doAction(MiniMenuAction.USEHELD_START, knife.id, knife.slot, knife.interfaceId);
         this.timer.setTimer(TIMER_KNIFE_USE, 120);
+        this.timer.setTimer(TIMER_GAME_INTERACT, 400);
+        return true;
+    }
+
+    private beginBurnLog(api: Bot['api'], logId: number): boolean {
+        if (isStandingOnFire(api)) {
+            return false;
+        }
+        const tinder = api.inventory.getItemById(ID_TINDERBOX);
+        const log = api.inventory.getItemById(logId);
+        if (!tinder || !log) {
+            return false;
+        }
+        this.pendingBurnLogId = logId;
+        this.tinderUseStep = 'need_use_on_log';
+        void api.doAction(MiniMenuAction.USEHELD_START, tinder.id, tinder.slot, tinder.interfaceId);
+        this.timer.setTimer(TIMER_TINDER_USE, 120);
         this.timer.setTimer(TIMER_GAME_INTERACT, 400);
         return true;
     }
@@ -323,6 +541,30 @@ export default class AutoWoodcutter extends BotScript {
                 void api.doAction(MiniMenuAction.IF_BUTTON, 0, 0, com);
             }
             this.timer.setTimer(TIMER_GAME_INTERACT, 2200);
+            return;
+        }
+
+        if (this.tinderUseStep === 'awaiting_fire') {
+            if (isFiremakingComplete(api, this.burnFireTileX, this.burnFireTileZ)) {
+                this.tinderUseStep = 'idle';
+                this.pendingBurnLogId = null;
+                this.burnFireTileX = -1;
+                this.burnFireTileZ = -1;
+                this.burnWaitStartedAt = 0;
+                this.timer.setTimer(TIMER_GAME_INTERACT, 800);
+                return;
+            }
+            if (this.burnWaitStartedAt > 0 && Date.now() - this.burnWaitStartedAt > BURN_FIRE_WAIT_MS) {
+                api.bot.log('WARN', 'AutoWoodcutter.update', 'firemaking timed out waiting for fire', {});
+                this.tinderUseStep = 'idle';
+                this.pendingBurnLogId = null;
+                this.burnFireTileX = -1;
+                this.burnFireTileZ = -1;
+                this.burnWaitStartedAt = 0;
+                this.timer.setTimer(TIMER_GAME_INTERACT, 1200);
+                return;
+            }
+            this.timer.setTimer(TIMER_GAME_INTERACT, 350);
             return;
         }
 
@@ -361,17 +603,39 @@ export default class AutoWoodcutter extends BotScript {
             return;
         }
 
-        if (!hasAnyAxe(api)) {
+        if (this.tinderUseStep === 'need_use_on_log' && !this.timer.hasTimer(TIMER_TINDER_USE)) {
+            const log =
+                this.pendingBurnLogId !== null ? api.inventory.getItemById(this.pendingBurnLogId) : null;
+            if (log) {
+                this.burnFireTileX = api.player.getLocalX();
+                this.burnFireTileZ = api.player.getLocalZ();
+                void api.doAction(MiniMenuAction.USEHELD_ONHELD, log.id, log.slot, log.interfaceId);
+            }
+            this.tinderUseStep = 'awaiting_fire';
+            this.burnWaitStartedAt = Date.now();
+            this.timer.setTimer(TIMER_GAME_INTERACT, 350);
+            return;
+        }
+
+        if (!this.bankEnabled && !hasAnyAxe(api)) {
             api.bot.log('WARN', 'AutoWoodcutter.update', 'no hatchet in inventory', {});
             this.timer.setTimer(TIMER_GAME_INTERACT, 2500);
             return;
         }
 
-        const fletchTogglesOn = this.cutShafts || this.cutShortbow || this.cutLongbow;
+        const fletch = fletchFlagsForAction(this.logAction);
+        const fletchEnabled = fletch.cutShafts || fletch.cutShortbow || fletch.cutLongbow;
+        if (!this.bankEnabled && (this.logAction === 'shortbow' || this.logAction === 'longbow')) {
+            if (dropOneUnstrungBow(api)) {
+                this.timer.setTimer(TIMER_GAME_INTERACT, 600);
+                return;
+            }
+        }
+
         const logIds = [ID_LOGS, ID_OAK_LOGS, ID_WILLOW_LOGS];
         for (let li = 0; li < logIds.length; li++) {
             const lid = logIds[li]!;
-            if (!api.inventory.hasItem(lid) || !wantsFletchOnLog(lid, this.cutShafts, this.cutShortbow, this.cutLongbow)) {
+            if (!api.inventory.hasItem(lid) || !wantsFletchOnLog(lid, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow)) {
                 continue;
             }
             if (!api.inventory.hasItem(ID_KNIFE)) {
@@ -382,11 +646,25 @@ export default class AutoWoodcutter extends BotScript {
             }
         }
 
-        const needsKnifeForFletch = fletchTogglesOn && hasAnyFletchLog(api) && !api.inventory.hasItem(ID_KNIFE);
+        if (!this.bankEnabled && this.logAction === 'burn' && api.inventory.hasItem(ID_TINDERBOX) && !isStandingOnFire(api)) {
+            const burnLogId = logIdForTreeKind(this.treeKind);
+            if (api.inventory.hasItem(burnLogId) && this.beginBurnLog(api, burnLogId)) {
+                return;
+            }
+        }
+
+        if (!this.bankEnabled && this.logAction === 'drop' && api.inventory.isFull()) {
+            if (dropOneUnstrungBow(api) || dropOneLogForSpace(api, this.treeKind)) {
+                this.timer.setTimer(TIMER_GAME_INTERACT, 600);
+                return;
+            }
+        }
+
+        const needsKnifeForFletch = fletchEnabled && hasAnyFletchLog(api) && !api.inventory.hasItem(ID_KNIFE);
         const needBank =
             this.bankEnabled && (api.inventory.isFull() || !hasAnyAxe(api) || needsKnifeForFletch);
 
-        if (needBank) {
+        if (needBank && this.spot) {
             if (!api.bank.isOpen()) {
                 this.timer.setTimer(TIMER_GAME_INTERACT, 1600);
                 if (!api.bank.open()) {
@@ -405,7 +683,7 @@ export default class AutoWoodcutter extends BotScript {
                 await api.bank.withdraw(1351, 1);
                 return;
             }
-            if (fletchTogglesOn && !api.inventory.hasItem(ID_KNIFE)) {
+            if (fletchEnabled && !api.inventory.hasItem(ID_KNIFE)) {
                 await api.bank.withdraw(ID_KNIFE, 1);
             }
             return;
@@ -413,10 +691,11 @@ export default class AutoWoodcutter extends BotScript {
 
         if (!api.player.isAnimating()) {
             this.timer.setTimer(TIMER_GAME_INTERACT, 2000);
-            const tree = findChoppableTree(api, this.spot, this.bankEnabled, 14);
+            const anchor = this.spot?.anchor ?? null;
+            const tree = findChoppableTree(api, this.treeKind, this.bankEnabled, anchor, 14);
             if (tree) {
                 tree.interact(0);
-            } else if (this.bankEnabled && api.world.distanceTo(this.spot.anchor[0], this.spot.anchor[1]) > 8) {
+            } else if (this.bankEnabled && this.spot && api.world.distanceTo(this.spot.anchor[0], this.spot.anchor[1]) > 8) {
                 await api.world.walkPath(this.spot.pathToBank, false);
             }
         }

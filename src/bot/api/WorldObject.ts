@@ -62,4 +62,40 @@ export default class WorldObject {
         });
         return closest;
     }
+
+    /** Shortest walkable steps from the player to interact with this loc; -1 if unreachable. */
+    getPathfindSteps(wo: WorldObjectEntity): number {
+        if (!this.api.isLoggedIn()) {
+            return -1;
+        }
+        const srcX = this.api.player.getLocalX();
+        const srcZ = this.api.player.getLocalZ();
+        if (srcX < 0 || srcZ < 0) {
+            return -1;
+        }
+        return this.api.surface.pathfindStepsToLoc(srcX, srcZ, wo.x, wo.z, wo.typecode);
+    }
+
+    getNearestByIdPath(ids: number[], maxSteps: number = 100): WorldObjectEntity | null {
+        const srcX = this.api.player.getLocalX();
+        const srcZ = this.api.player.getLocalZ();
+        if (srcX < 0 || srcZ < 0) {
+            return null;
+        }
+        const worldObjects = this.getById(ids);
+        let closest: WorldObjectEntity | null = null;
+        let bestSteps = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < worldObjects.length; i++) {
+            const wo = worldObjects[i]!;
+            const steps = this.api.surface.pathfindStepsToLoc(srcX, srcZ, wo.x, wo.z, wo.typecode);
+            if (steps < 0 || steps > maxSteps) {
+                continue;
+            }
+            if (steps < bestSteps) {
+                bestSteps = steps;
+                closest = wo;
+            }
+        }
+        return closest;
+    }
 }

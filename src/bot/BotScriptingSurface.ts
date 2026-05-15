@@ -1,7 +1,10 @@
 import type { Client } from '#/client/Client.js';
+import LocType from '#/config/LocType.js';
 import type ClientNpc from '#/dash3d/ClientNpc.js';
 import type ClientObj from '#/dash3d/ClientObj.js';
 import type ClientPlayer from '#/dash3d/ClientPlayer.js';
+import { LocAngle } from '#/dash3d/LocAngle.js';
+import { LocShape } from '#/dash3d/LocShape.js';
 import type World from '#/dash3d/World.js';
 import LinkList from '#/datastruct/LinkList.js';
 import type Packet from '#/io/Packet.js';
@@ -165,6 +168,55 @@ export default class BotScriptingSurface {
             0,
             0
         );
+    }
+
+    /** Walkable tile steps to chop/interact with a scene loc; -1 if unreachable. */
+    pathfindStepsToLoc(srcX: number, srcZ: number, x: number, z: number, typecode: number): number {
+        const a = acc(this.client);
+        if (!a.ingame || !a.world) {
+            return -1;
+        }
+        const info: number = a.world.typeCode2(a.minusedlevel, x, z, typecode);
+        if (info === -1) {
+            return -1;
+        }
+        const shape: number = info & 0x1f;
+        const angle: number = (info >> 6) & 0x3;
+        const locId: number = (typecode >> 14) & 0x7fff;
+        const loc: LocType = LocType.list(locId);
+        const client = this.client as unknown as {
+            pathfindSteps(
+                srcX: number,
+                srcZ: number,
+                dx: number,
+                dz: number,
+                tryNearest: boolean,
+                locWidth: number,
+                locLength: number,
+                locAngle: number,
+                locShape: number,
+                forceapproach: number
+            ): number;
+        };
+
+        if (shape === LocShape.CENTREPIECE_STRAIGHT || shape === LocShape.CENTREPIECE_DIAGONAL || shape === LocShape.GROUND_DECOR) {
+            let width: number;
+            let height: number;
+            if (angle === LocAngle.WEST || angle === LocAngle.EAST) {
+                width = loc.width;
+                height = loc.length;
+            } else {
+                width = loc.length;
+                height = loc.width;
+            }
+            let forceapproach: number = loc.forceapproach;
+            if (angle !== 0) {
+                forceapproach = ((forceapproach << angle) & 0xf) + (forceapproach >> (4 - angle));
+            }
+            return client.pathfindSteps(srcX, srcZ, x, z, false, width, height, 0, 0, forceapproach);
+        }
+
+        return client.pathfindSteps(srcX, srcZ, x, z, false, 0, 0, angle, shape + 1, 0);
     }
 
     async login(username: string, password: string, reconnect: boolean): Promise<void> {

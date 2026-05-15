@@ -201,6 +201,8 @@ export class Client extends GameShell {
     private zoneUpdateZ: number = 0;
 
     private tryMoveNearest: number = 0;
+    private lastPathfindDestX: number = 0;
+    private lastPathfindDestZ: number = 0;
     private dirMap: Int32Array = new Int32Array(BuildArea.SIZE * BuildArea.SIZE);
     private distMap: Int32Array = new Int32Array(BuildArea.SIZE * BuildArea.SIZE);
     private routeX: Int32Array = new Int32Array(4000);
@@ -5934,10 +5936,11 @@ export class Client extends GameShell {
         return true;
     }
 
-    private tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean {
-        const collisionMap: CollisionMap | null = this.collision[this.minusedlevel];
+    /** Tile-step distance to approach a loc/tile; -1 if unreachable. Leaves `dirMap` ready for route encoding. */
+    pathfindSteps(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number): number {
+        const collisionMap: CollisionMap | null = this.collision?.[this.minusedlevel] ?? null;
         if (!collisionMap) {
-            return false;
+            return -1;
         }
 
         const sceneWidth: number = BuildArea.SIZE;
@@ -6123,11 +6126,24 @@ export class Client extends GameShell {
             }
 
             if (!arrived) {
-                return false;
+                return -1;
             }
         }
 
-        length = 0;
+        this.lastPathfindDestX = x;
+        this.lastPathfindDestZ = z;
+        return this.distMap[CollisionMap.index(x, z)];
+    }
+
+    private tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean {
+        const pathSteps: number = this.pathfindSteps(srcX, srcZ, dx, dz, tryNearest, locWidth, locLength, locAngle, locShape, forceapproach);
+        if (pathSteps < 0) {
+            return false;
+        }
+
+        let x: number = this.lastPathfindDestX;
+        let z: number = this.lastPathfindDestZ;
+        let length: number = 0;
         this.routeX[length] = x;
         this.routeZ[length++] = z;
 
@@ -6156,7 +6172,7 @@ export class Client extends GameShell {
         }
 
         if (length > 0) {
-            bufferSize = Math.min(length, 25); // max number of turns in a single pf request
+            let bufferSize: number = Math.min(length, 25); // max number of turns in a single pf request
             length--;
 
             const startX: number = this.routeX[length];
