@@ -17,11 +17,20 @@ const ID_FIRE_LOC = 2732;
 const ID_LOGS = 1511;
 const ID_OAK_LOGS = 1521;
 const ID_WILLOW_LOGS = 1519;
+const ID_MAPLE_LOGS = 1517;
+const ID_YEW_LOGS = 1515;
+const ID_MAGIC_LOGS = 1513;
+
+/** Highest-tier log first (burn / drop / fletch priority). */
+const ALL_LOG_IDS = [ID_MAGIC_LOGS, ID_YEW_LOGS, ID_MAPLE_LOGS, ID_WILLOW_LOGS, ID_OAK_LOGS, ID_LOGS] as const;
 
 const AXE_IDS = [1349, 1351, 1353, 1355, 1357, 1359, 1361] as const;
 
 /** Unstrung bows from knife fletching (`obj.pack`). */
-const UNSTRUNG_BOW_IDS = [841, 839, 843, 845, 849, 847] as const;
+const UNSTRUNG_BOW_IDS = [
+    72, 70, 68, 66, 64, 62, // magic, yew, maple
+    841, 839, 843, 845, 849, 847 // willow, oak, normal
+] as const;
 
 const MULTIOBJ3_SHAFT = 2800;
 const MULTIOBJ3_SHORT = 2801;
@@ -29,7 +38,9 @@ const MULTIOBJ3_LONG = 2802;
 const MULTIOBJ2_SHORT = 142;
 const MULTIOBJ2_LONG = 143;
 
-type TreeKind = 'normal' | 'oak' | 'willow';
+type TreeKind = 'normal' | 'oak' | 'willow' | 'maple' | 'yew' | 'magic';
+
+const TREE_KINDS_HIGH_TO_LOW: TreeKind[] = ['magic', 'yew', 'maple', 'willow', 'oak', 'normal'];
 
 type LogAction = 'none' | 'drop' | 'burn' | 'shafts' | 'shortbow' | 'longbow';
 
@@ -43,20 +54,38 @@ const STAT_FLETCHING = 19;
 const WC_LEVEL_FOR_TREE: Record<TreeKind, number> = {
     normal: 0,
     oak: 15,
-    willow: 30
+    willow: 30,
+    maple: 45,
+    yew: 60,
+    magic: 75
+};
+
+const LOG_ID_BY_TREE_KIND: Record<TreeKind, number> = {
+    normal: ID_LOGS,
+    oak: ID_OAK_LOGS,
+    willow: ID_WILLOW_LOGS,
+    maple: ID_MAPLE_LOGS,
+    yew: ID_YEW_LOGS,
+    magic: ID_MAGIC_LOGS
 };
 
 const FM_LEVEL_FOR_LOG: Record<number, number> = {
     [ID_LOGS]: 1,
     [ID_OAK_LOGS]: 15,
-    [ID_WILLOW_LOGS]: 30
+    [ID_WILLOW_LOGS]: 30,
+    [ID_MAPLE_LOGS]: 45,
+    [ID_YEW_LOGS]: 60,
+    [ID_MAGIC_LOGS]: 75
 };
 
 /** From `skill_fletching/configs/cut_logs/cut_logs.dbrow`. */
 const FLETCH_LEVEL_FOR_LOG: Record<number, Partial<Record<FletchProduct, number>>> = {
     [ID_LOGS]: { shafts: 1, shortbow: 5, longbow: 10 },
     [ID_OAK_LOGS]: { shortbow: 20, longbow: 25 },
-    [ID_WILLOW_LOGS]: { shortbow: 35, longbow: 40 }
+    [ID_WILLOW_LOGS]: { shortbow: 35, longbow: 40 },
+    [ID_MAPLE_LOGS]: { shortbow: 50, longbow: 55 },
+    [ID_YEW_LOGS]: { shortbow: 65, longbow: 70 },
+    [ID_MAGIC_LOGS]: { shortbow: 80, longbow: 85 }
 };
 
 /** Loc type ids from `skill_woodcutting` tree tables / `loc.pack`. */
@@ -67,7 +96,10 @@ const TREE_LOC_IDS: Record<TreeKind, readonly number[]> = {
         1315, 1316, 1318, 1319, 1330, 1331, 1332, 1365
     ],
     oak: [1281],
-    willow: [1308]
+    willow: [1308],
+    maple: [1307],
+    yew: [1309],
+    magic: [1306]
 };
 
 type WoodSpot = {
@@ -120,7 +152,12 @@ function hasAnyAxe(api: Bot['api']): boolean {
 }
 
 function hasAnyFletchLog(api: Bot['api']): boolean {
-    return api.inventory.hasItem(ID_LOGS) || api.inventory.hasItem(ID_OAK_LOGS) || api.inventory.hasItem(ID_WILLOW_LOGS);
+    for (let i = 0; i < ALL_LOG_IDS.length; i++) {
+        if (api.inventory.hasItem(ALL_LOG_IDS[i]!)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function hasFireAtTile(api: Bot['api'], tileX: number, tileZ: number): boolean {
@@ -206,14 +243,13 @@ function pickDialogCom(
         }
         return null;
     }
-    if (logId === ID_OAK_LOGS || logId === ID_WILLOW_LOGS) {
+    if (FLETCH_LEVEL_FOR_LOG[logId]) {
         if (cutShortbow) {
             return MULTIOBJ2_SHORT;
         }
         if (cutLongbow) {
             return MULTIOBJ2_LONG;
         }
-        return null;
     }
     return null;
 }
@@ -230,7 +266,11 @@ function wantsFletchOnLog(logId: number, cutShafts: boolean, cutShortbow: boolea
     if (logId === ID_LOGS) {
         return cutShafts || cutShortbow || cutLongbow;
     }
-    return (logId === ID_OAK_LOGS || logId === ID_WILLOW_LOGS) && (cutShortbow || cutLongbow);
+    const table = FLETCH_LEVEL_FOR_LOG[logId];
+    if (!table) {
+        return false;
+    }
+    return (cutShortbow && table.shortbow !== undefined) || (cutLongbow && table.longbow !== undefined);
 }
 
 function fletchLevelRequired(logId: number, product: FletchProduct): number | null {
@@ -260,9 +300,8 @@ function canBurnLog(api: Bot['api'], logId: number): boolean {
 }
 
 function pickBurnableLogId(api: Bot['api']): number | null {
-    const order = [ID_WILLOW_LOGS, ID_OAK_LOGS, ID_LOGS];
-    for (let i = 0; i < order.length; i++) {
-        const logId = order[i]!;
+    for (let i = 0; i < ALL_LOG_IDS.length; i++) {
+        const logId = ALL_LOG_IDS[i]!;
         if (api.inventory.hasItem(logId) && canBurnLog(api, logId)) {
             return logId;
         }
@@ -272,13 +311,14 @@ function pickBurnableLogId(api: Bot['api']): number | null {
 
 function resolveEffectiveTreeKind(api: Bot['api'], requested: TreeKind): TreeKind {
     const wc = api.player.getLevel(STAT_WOODCUTTING);
-    if (requested === 'willow' && wc < WC_LEVEL_FOR_TREE.willow) {
-        return wc >= WC_LEVEL_FOR_TREE.oak ? 'oak' : 'normal';
+    const startIdx = TREE_KINDS_HIGH_TO_LOW.indexOf(requested);
+    for (let i = Math.max(0, startIdx); i < TREE_KINDS_HIGH_TO_LOW.length; i++) {
+        const kind = TREE_KINDS_HIGH_TO_LOW[i]!;
+        if (wc >= WC_LEVEL_FOR_TREE[kind]) {
+            return kind;
+        }
     }
-    if (requested === 'oak' && wc < WC_LEVEL_FOR_TREE.oak) {
-        return 'normal';
-    }
-    return requested;
+    return 'normal';
 }
 
 function fallbackLogAction(bankEnabled: boolean): LogAction {
@@ -380,9 +420,8 @@ function dropOneLogForSpace(api: Bot['api'], treeKind: TreeKind): boolean {
     const preferred = logIdForTreeKind(treeKind);
     let item = api.inventory.getItemById(preferred);
     if (!item) {
-        const logIds = [ID_LOGS, ID_OAK_LOGS, ID_WILLOW_LOGS];
-        for (let i = 0; i < logIds.length; i++) {
-            item = api.inventory.getItemById(logIds[i]!);
+        for (let i = 0; i < ALL_LOG_IDS.length; i++) {
+            item = api.inventory.getItemById(ALL_LOG_IDS[i]!);
             if (item) {
                 break;
             }
@@ -396,13 +435,7 @@ function dropOneLogForSpace(api: Bot['api'], treeKind: TreeKind): boolean {
 }
 
 function logIdForTreeKind(kind: TreeKind): number {
-    if (kind === 'oak') {
-        return ID_OAK_LOGS;
-    }
-    if (kind === 'willow') {
-        return ID_WILLOW_LOGS;
-    }
-    return ID_LOGS;
+    return LOG_ID_BY_TREE_KIND[kind];
 }
 
 export default class AutoWoodcutter extends BotScript {
@@ -453,13 +486,34 @@ export default class AutoWoodcutter extends BotScript {
             treeKind: 'oak',
             anchor: [3275, 3426],
             pathToBank: [[3275, 3426], [3262, 3423], [3255, 3420]]
+        },
+        {
+            label: 'Seers maple',
+            treeKind: 'maple',
+            anchor: [2720, 3475],
+            pathToBank: [[2720, 3475], [2727, 3493]]
+        },
+        {
+            label: 'Edgeville yew',
+            treeKind: 'yew',
+            anchor: [3221, 3504],
+            pathToBank: [[3221, 3504], [3093, 3491]]
+        },
+        {
+            label: 'Seers magic',
+            treeKind: 'magic',
+            anchor: [2705, 3396],
+            pathToBank: [[2705, 3396], [2727, 3493]]
         }
     ];
 
     static treeKindOptions: { label: string; kind: TreeKind }[] = [
         { label: 'Tree (normal logs)', kind: 'normal' },
         { label: 'Oak', kind: 'oak' },
-        { label: 'Willow', kind: 'willow' }
+        { label: 'Willow', kind: 'willow' },
+        { label: 'Maple', kind: 'maple' },
+        { label: 'Yew', kind: 'yew' },
+        { label: 'Magic', kind: 'magic' }
     ];
 
     static logActionOptions: { value: LogAction; label: string; hint: string; requiresBank?: boolean; requiresNoBank?: boolean }[] = [
@@ -751,10 +805,13 @@ export default class AutoWoodcutter extends BotScript {
         }
 
         if (this.knifeUseStep === 'need_use_on_log' && !this.timer.hasTimer(TIMER_KNIFE_USE)) {
-            const log =
-                api.inventory.getItemById(ID_LOGS) ??
-                api.inventory.getItemById(ID_OAK_LOGS) ??
-                api.inventory.getItemById(ID_WILLOW_LOGS);
+            let log = null;
+            for (let i = 0; i < ALL_LOG_IDS.length; i++) {
+                log = api.inventory.getItemById(ALL_LOG_IDS[i]!);
+                if (log) {
+                    break;
+                }
+            }
             if (log) {
                 void api.doAction(MiniMenuAction.USEHELD_ONHELD, log.id, log.slot, log.interfaceId);
             }
@@ -804,9 +861,8 @@ export default class AutoWoodcutter extends BotScript {
             }
         }
 
-        const logIds = [ID_LOGS, ID_OAK_LOGS, ID_WILLOW_LOGS];
-        for (let li = 0; li < logIds.length; li++) {
-            const lid = logIds[li]!;
+        for (let li = 0; li < ALL_LOG_IDS.length; li++) {
+            const lid = ALL_LOG_IDS[li]!;
             if (
                 !api.inventory.hasItem(lid) ||
                 !wantsFletchOnLog(lid, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow) ||

@@ -1,5 +1,13 @@
 import type { Client } from '#/client/Client.js';
 import type { BotLogLevel } from './BotLog.js';
+import {
+    type BotDebugFlags,
+    readBotDebugModeEnabled,
+    readEffectiveBotDebugFlags,
+    readStoredBotDebugFlags,
+    writeBotDebugModeEnabled,
+    writeStoredBotDebugFlags
+} from './botDebugStorage.js';
 import BotAPI from './api/BotAPI';
 import AutoFisher from './scripts/AutoFisher';
 import AutoKiller from './scripts/AutoKiller';
@@ -14,15 +22,6 @@ import { formatDetail } from './api/botApiAssert.js';
 function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
     return scriptCtor.name;
 }
-
-type BotDebugFlags = {
-    itemIds: boolean;
-    npcIds: boolean;
-    worldObjectIds: boolean;
-    walkTileCoords: boolean;
-};
-
-const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
 
 const MAX_LOG_LINES = 4000;
 
@@ -39,14 +38,14 @@ export default class Bot {
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
     private activeTab: 'script' | 'debug' | 'logs' = 'script';
-    private debugFlags: BotDebugFlags = {
-        itemIds: false,
-        npcIds: false,
-        worldObjectIds: false,
-        walkTileCoords: false
-    };
+    private debugModeEnabled = false;
+    private debugFlags: BotDebugFlags = readStoredBotDebugFlags();
 
     private logLines: string[] = [];
+
+    isDebugModeEnabled(): boolean {
+        return this.debugModeEnabled;
+    }
 
     private setSummary(text: string) {
         const summary = document.getElementById('botScriptSummary');
@@ -60,30 +59,16 @@ export default class Bot {
     }
 
     private applyDebugFlags() {
-        this.getClientWithDebugSetter().setBotDebugFlags(this.debugFlags);
+        const effective = this.debugModeEnabled ? this.debugFlags : readEffectiveBotDebugFlags();
+        this.getClientWithDebugSetter().setBotDebugFlags(effective);
     }
 
     private saveDebugFlags() {
-        localStorage.setItem(BOT_DEBUG_STORAGE_KEY, JSON.stringify(this.debugFlags));
+        writeStoredBotDebugFlags(this.debugFlags);
     }
 
     private loadDebugFlags() {
-        const raw = localStorage.getItem(BOT_DEBUG_STORAGE_KEY);
-        if (!raw) {
-            return;
-        }
-
-        try {
-            const parsed = JSON.parse(raw) as Partial<BotDebugFlags>;
-            this.debugFlags = {
-                itemIds: parsed.itemIds === true,
-                npcIds: parsed.npcIds === true,
-                worldObjectIds: parsed.worldObjectIds === true,
-                walkTileCoords: parsed.walkTileCoords === true
-            };
-        } catch {
-            this.debugFlags = { itemIds: false, npcIds: false, worldObjectIds: false, walkTileCoords: false };
-        }
+        this.debugFlags = readStoredBotDebugFlags();
     }
 
     private flushLogTextarea() {
@@ -126,7 +111,14 @@ export default class Bot {
         return this.currentScript !== null;
     }
 
+    private isDebugScriptInstance(script: BotScript): boolean {
+        return script.isDebugScript === true;
+    }
+
     private setTab(tab: 'script' | 'debug' | 'logs') {
+        if (tab === 'debug' && !this.debugModeEnabled) {
+            tab = 'script';
+        }
         this.activeTab = tab;
         const scriptButton = document.getElementById('botTabScript');
         const debugButton = document.getElementById('botTabDebug');
@@ -150,6 +142,7 @@ export default class Bot {
         }
 
         checkbox.checked = this.debugFlags[key];
+        checkbox.disabled = !this.debugModeEnabled;
         checkbox.onchange = () => {
             this.debugFlags[key] = checkbox.checked;
             this.saveDebugFlags();
@@ -157,7 +150,67 @@ export default class Bot {
         };
     }
 
+    private refreshDebugToggleInputs() {
+        const keys: (keyof BotDebugFlags)[] = ['itemIds', 'npcIds', 'worldObjectIds', 'walkTileCoords'];
+        const ids = ['botDebugItemIds', 'botDebugNpcIds', 'botDebugWorldObjectIds', 'botDebugWalkTileCoords'];
+        for (let i = 0; i < keys.length; i++) {
+            const checkbox = document.getElementById(ids[i]) as HTMLInputElement | null;
+            if (!checkbox) {
+                continue;
+            }
+            checkbox.checked = this.debugFlags[keys[i]];
+            checkbox.disabled = !this.debugModeEnabled;
+        }
+    }
+
+    setDebugMode(enabled: boolean): void {
+        if (this.debugModeEnabled === enabled) {
+            return;
+        }
+        this.debugModeEnabled = enabled;
+        writeBotDebugModeEnabled(enabled);
+        this.updateDebugModeUi();
+        if (!enabled && this.currentScript && this.isDebugScriptInstance(this.currentScript)) {
+            this.stop();
+        }
+        this.reloadScripts();
+        this.applyDebugFlags();
+    }
+
+    private updateDebugModeUi() {
+        const debugTab = document.getElementById('botTabDebug');
+        const debugPanel = document.getElementById('bot-debug-panel');
+        const modeToggle = document.getElementById('botDebugMode') as HTMLInputElement | null;
+
+        if (debugTab) {
+            debugTab.hidden = !this.debugModeEnabled;
+        }
+        if (debugPanel && !this.debugModeEnabled) {
+            debugPanel.classList.remove('bot-panel-active');
+        }
+        if (modeToggle) {
+            modeToggle.checked = this.debugModeEnabled;
+        }
+
+        if (!this.debugModeEnabled && this.activeTab === 'debug') {
+            this.setTab('script');
+        } else {
+            this.setTab(this.activeTab);
+        }
+
+        this.refreshDebugToggleInputs();
+    }
+
+    private scriptVisibleInUi(scriptCtor: new (...args: unknown[]) => BotScript): boolean {
+        const instance = new scriptCtor();
+        if (!this.debugModeEnabled && instance.isDebugScript) {
+            return false;
+        }
+        return true;
+    }
+
     private initUi() {
+        this.debugModeEnabled = readBotDebugModeEnabled();
         this.loadDebugFlags();
         this.applyDebugFlags();
 
@@ -167,7 +220,13 @@ export default class Bot {
         scriptButton?.addEventListener('click', () => this.setTab('script'));
         debugButton?.addEventListener('click', () => this.setTab('debug'));
         logsButton?.addEventListener('click', () => this.setTab('logs'));
-        this.setTab(this.activeTab);
+
+        const modeToggle = document.getElementById('botDebugMode') as HTMLInputElement | null;
+        modeToggle?.addEventListener('change', () => {
+            this.setDebugMode(modeToggle.checked);
+        });
+
+        this.updateDebugModeUi();
 
         this.bindDebugToggle('botDebugItemIds', 'itemIds');
         this.bindDebugToggle('botDebugNpcIds', 'npcIds');
@@ -219,6 +278,10 @@ export default class Bot {
     }
 
     saveScript(name: string, startScript: string, updateScript: string, endScript: string, htmlSetupScript: string, buildFromHtmlScript: string) {
+        if (!this.debugModeEnabled) {
+            window.alert('Enable debug mode to create or edit custom scripts.');
+            return;
+        }
         localStorage.setItem('localScript_' + name, JSON.stringify({
             name,
             startScript,
@@ -247,20 +310,25 @@ export default class Bot {
             }
         }
 
-        for (let i = 0; i < localStorage.length; ++i) {
-            const lsKey = localStorage.key(i);
-            if (lsKey?.startsWith('localScript_')) {
-                const raw = localStorage.getItem(lsKey);
-                if (!raw) {
-                    continue;
+        if (this.debugModeEnabled) {
+            for (let i = 0; i < localStorage.length; ++i) {
+                const lsKey = localStorage.key(i);
+                if (lsKey?.startsWith('localScript_')) {
+                    const raw = localStorage.getItem(lsKey);
+                    if (!raw) {
+                        continue;
+                    }
+                    const scData = JSON.parse(raw);
+                    const builtClass = ScriptLoader.createScriptClass(scData.name, scData.startScript, scData.updateScript, scData.endScript, scData.htmlSetupScript, scData.buildFromHtmlScript);
+                    this.scripts.push(builtClass);
                 }
-                const scData = JSON.parse(raw);
-                const builtClass = ScriptLoader.createScriptClass(scData.name, scData.startScript, scData.updateScript, scData.endScript, scData.htmlSetupScript, scData.buildFromHtmlScript);
-                this.scripts.push(builtClass);
             }
         }
 
         this.scripts.forEach(script => {
+            if (!this.scriptVisibleInUi(script)) {
+                return;
+            }
             const option = document.createElement('option');
             const key = scriptRegistryKey(script);
             option.value = key;
@@ -269,7 +337,7 @@ export default class Bot {
         });
 
         const select = elemBotScripts as HTMLSelectElement | null;
-        if (select && previousSelection && this.scripts.some(script => scriptRegistryKey(script) === previousSelection)) {
+        if (select && previousSelection && this.scripts.some(script => scriptRegistryKey(script) === previousSelection && this.scriptVisibleInUi(script))) {
             select.value = previousSelection;
         }
 
@@ -277,6 +345,10 @@ export default class Bot {
     }
 
     start(script: BotScript) {
+        if (!this.debugModeEnabled && this.isDebugScriptInstance(script)) {
+            this.log('WARN', 'Bot.start', 'Cannot start debug script without debug mode', { script: script.name });
+            return;
+        }
         this.stop();
         this.currentScript = script;
         const name = scriptRegistryKey(script.constructor as new (...args: unknown[]) => unknown);

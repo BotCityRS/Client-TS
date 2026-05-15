@@ -4,6 +4,7 @@ import { stopMidi, setMidiVolume, playMidi } from '#3rdparty/tinymidipcm.js';
 import { ClientCode } from '#/client/ClientCode.js';
 import GameShell from '#/client/GameShell.js';
 import InputTracking from '#/client/InputTracking.js';
+import { readEffectiveBotDebugFlags, type BotDebugFlags } from '#/bot/botDebugStorage.js';
 import { CLIENT_BOT_LEGACY_MENU_OPCODES_SORTED } from '#/bot/botLegacyMenuOpcodes.js';
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import MobileKeyboard from '#/client/MobileKeyboard.js';
@@ -82,14 +83,6 @@ const SCROLLBAR_TRACK = 0x23201b;
 const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
-
-type BotDebugFlags = {
-    itemIds: boolean;
-    npcIds: boolean;
-    worldObjectIds: boolean;
-    walkTileCoords: boolean;
-};
-const BOT_DEBUG_STORAGE_KEY = 'bot_debug_flags';
 
 export class Client extends GameShell {
     static levelExperience: number[] = [];
@@ -5300,27 +5293,7 @@ export class Client extends GameShell {
     }
 
     private readPersistedDebugFlags(): BotDebugFlags {
-        const defaults: BotDebugFlags = {
-            itemIds: this.debugItemIds,
-            npcIds: this.debugNpcIds,
-            worldObjectIds: this.debugWorldObjectIds,
-            walkTileCoords: this.debugWalkTileCoords
-        };
-        try {
-            const raw = localStorage.getItem(BOT_DEBUG_STORAGE_KEY);
-            if (!raw) {
-                return defaults;
-            }
-            const parsed = JSON.parse(raw) as Partial<BotDebugFlags>;
-            return {
-                itemIds: parsed.itemIds === true || defaults.itemIds,
-                npcIds: parsed.npcIds === true || defaults.npcIds,
-                worldObjectIds: parsed.worldObjectIds === true || defaults.worldObjectIds,
-                walkTileCoords: parsed.walkTileCoords === true || defaults.walkTileCoords
-            };
-        } catch {
-            return defaults;
-        }
+        return readEffectiveBotDebugFlags();
     }
 
     private debugNpcIdSuffix(npcId: number): string {

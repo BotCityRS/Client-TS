@@ -80,7 +80,7 @@ export default class AutoWalker extends BotScript {
     traverse: boolean;
 
     constructor(locationId: number, traverse: boolean) {
-        super('AutoWalker', true);
+        super('AutoWalker', true, true);
         this.timer = new Timer();
         this.path = AutoWalker.paths[locationId];
         this.traverse = traverse;

@@ -76,7 +76,7 @@ export default class ScriptLoader extends BotScript {
     scriptEnd: string;
 
     constructor(scriptStart: string, scriptUpdate: string, scriptEnd: string) {
-        super('ScriptLoader', true);
+        super('ScriptLoader', true, true);
 
         this.scriptStart = scriptStart;
         this.scriptUpdate = scriptUpdate;
