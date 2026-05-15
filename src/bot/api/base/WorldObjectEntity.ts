@@ -1,8 +1,15 @@
-import { BOT_MENU_LOC_EXAMINE, BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES } from '../../botLegacyMenuOpcodes.js';
-import type LocType from "#/config/LocType";
-import type Entity from "#/dash3d/entity/Entity";
-import type BotAPI from "../BotAPI";
+import { MiniMenuAction } from '#/client/MiniMenuAction.js';
+import type LocType from '#/config/LocType';
+import type BotAPI from '../BotAPI';
 import Utility from "../Utility";
+
+const LOC_INTERACT_OPCODES: readonly number[] = [
+    MiniMenuAction.OP_LOC1,
+    MiniMenuAction.OP_LOC2,
+    MiniMenuAction.OP_LOC3,
+    MiniMenuAction.OP_LOC4,
+    MiniMenuAction.OP_LOC5
+];
 
 export default class WorldObjectEntity {
     api: BotAPI;
@@ -24,10 +31,17 @@ export default class WorldObjectEntity {
     }
 
     interact(optionIndex: number) {
-        this.api.doAction(BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES[optionIndex], this.typecode, this.x, this.z)
+        // `Client.doAction` OP_LOC* passes `interactWithLoc(b, c, a, …)` — same as the real menu:
+        // param A = packed typecode; B/C = low bits of typecode (scene fine tile indices), not model x/z.
+        const lx = this.typecode & 0x7f;
+        const lz = (this.typecode >> 7) & 0x7f;
+        const opcode = LOC_INTERACT_OPCODES[optionIndex] ?? MiniMenuAction.OP_LOC1;
+        this.api.doAction(opcode, this.typecode, lx, lz);
     }
 
     examine() {
-        this.api.doAction(BOT_MENU_LOC_EXAMINE, this.typecode, this.x, this.z)
+        const lx = this.typecode & 0x7f;
+        const lz = (this.typecode >> 7) & 0x7f;
+        this.api.doAction(MiniMenuAction.OP_LOC6, this.typecode, lx, lz);
     }
 }

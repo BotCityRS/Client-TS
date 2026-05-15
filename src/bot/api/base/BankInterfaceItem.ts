@@ -1,4 +1,4 @@
-import { BOT_MENU_BANK_DEPOSIT_1, BOT_MENU_BANK_DEPOSIT_ALL, BOT_MENU_BANK_DEPOSIT_X } from '../../botLegacyMenuOpcodes.js';
+import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import { ClientProt } from "#/io/ClientProt.js";
 import type BotAPI from "../BotAPI";
 import InterfaceItem from "./InterfaceItem";
@@ -9,11 +9,12 @@ export default class BankInterfaceItem extends InterfaceItem {
     }
 
     withdraw1() {
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_1, this.id, this.slot, this.interfaceId);
+        // `interface_bank/interfaces/bank_main.if` bank inv: option1=Withdraw 1 → INV_BUTTON1.
+        this.api.doAction(MiniMenuAction.INV_BUTTON1, this.id, this.slot, this.interfaceId);
     }
 
     async withdraw(count: number) {
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_X, this.id, this.slot, this.interfaceId);
+        this.api.doAction(MiniMenuAction.INV_BUTTON5, this.id, this.slot, this.interfaceId);
         return new Promise<boolean>((res) => {
             const timeout = Date.now() + 4000;
             const interval = setInterval(() => {
@@ -33,6 +34,6 @@ export default class BankInterfaceItem extends InterfaceItem {
     }
 
     withdrawAll() {
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_ALL, this.id, this.slot, this.interfaceId);
+        this.api.doAction(MiniMenuAction.INV_BUTTON4, this.id, this.slot, this.interfaceId);
     }
 }

@@ -1,4 +1,3 @@
-import { BOT_MENU_BANK_DEPOSIT_1, BOT_MENU_BANK_DEPOSIT_ALL, BOT_MENU_BANK_DEPOSIT_X } from '../../botLegacyMenuOpcodes.js';
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import { ClientProt } from "#/io/ClientProt.js";
 import type BotAPI from "../BotAPI";
@@ -28,11 +27,12 @@ export default class InvInterfaceItem extends InterfaceItem {
         if (!this.api.bank.isOpen()) {
             return;
         }
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_1, this.id, this.slot, this.bankOpenInterfaceId);
+        // Same as right-click Deposit 1 on the bank-side inventory (`Client` INV_BUTTON1 + INV_BUTTON1 prot).
+        this.api.doAction(MiniMenuAction.INV_BUTTON1, this.id, this.slot, this.bankOpenInterfaceId);
     }
 
     async deposit(count: number) {
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_X, this.id, this.slot, this.bankOpenInterfaceId);
+        this.api.doAction(MiniMenuAction.INV_BUTTON5, this.id, this.slot, this.bankOpenInterfaceId);
         return new Promise<boolean>((res) => {
             const timeout = Date.now() + 4000;
             const interval = setInterval(() => {
@@ -52,6 +52,7 @@ export default class InvInterfaceItem extends InterfaceItem {
     }
 
     depositAll() {
-        this.api.doAction(BOT_MENU_BANK_DEPOSIT_ALL, this.id, this.slot, this.bankOpenInterfaceId);
+        // `interface_bank/interfaces/bank_side.if`: option4=Deposit All → INV_BUTTON4 (see `Client` inv menu build).
+        this.api.doAction(MiniMenuAction.INV_BUTTON4, this.id, this.slot, this.bankOpenInterfaceId);
     }
 }

@@ -8,12 +8,7 @@ import EquipmentInterfaceItem from '../api/base/EquipmentInterfaceItem.js';
 import GroundItemEntity from '../api/base/GroundItemEntity.js';
 import InvInterfaceItem from '../api/base/InvInterfaceItem.js';
 import WorldObjectEntity from '../api/base/WorldObjectEntity.js';
-import {
-    BOT_MENU_BANK_CLOSE,
-    BOT_MENU_BANK_DEPOSIT_1,
-    BOT_MENU_LOC_EXAMINE,
-    BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES
-} from '../botLegacyMenuOpcodes.js';
+import { BOT_MENU_BANK_CLOSE } from '../botLegacyMenuOpcodes.js';
 import { createBotApiForTests, createStubClientState, lastDispatch } from '../testSupport/stubBotClient.js';
 
 let realSetInterval: typeof setInterval;
@@ -67,7 +62,7 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         });
     });
 
-    test('InvInterfaceItem.deposit1 uses legacy deposit-1 opcode', () => {
+    test('InvInterfaceItem.deposit1 uses INV_BUTTON1 (bank deposit-1)', () => {
         const state = createStubClientState();
         state.sideTab = 0;
         state.sideOverlayId[0] = 2005;
@@ -75,20 +70,20 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         const item = new InvInterfaceItem(api, 2006, 3, 995, 5);
         item.deposit1();
         expect(lastDispatch(state)).toEqual({
-            opcode: BOT_MENU_BANK_DEPOSIT_1,
+            opcode: MiniMenuAction.INV_BUTTON1,
             p1: 995,
             p2: 3,
             p3: 2006
         });
     });
 
-    test('BankInterfaceItem.withdraw1 uses same legacy opcode as deposit1', () => {
+    test('BankInterfaceItem.withdraw1 uses INV_BUTTON1 (bank withdraw-1)', () => {
         const state = createStubClientState();
         const api = createBotApiForTests(state);
         const item = new BankInterfaceItem(api, 5382, 2, 321, 10);
         item.withdraw1();
         expect(lastDispatch(state)).toEqual({
-            opcode: BOT_MENU_BANK_DEPOSIT_1,
+            opcode: MiniMenuAction.INV_BUTTON1,
             p1: 321,
             p2: 2,
             p3: 5382
@@ -115,17 +110,17 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         const wo = new WorldObjectEntity(api, 1, 12, 14, 999, loc);
         wo.interact(0);
         expect(lastDispatch(state)).toEqual({
-            opcode: BOT_WORLD_OBJECT_LOC_INTERACT_OPCODES[0],
+            opcode: MiniMenuAction.OP_LOC1,
             p1: 999,
-            p2: 12,
-            p3: 14
+            p2: 999 & 0x7f,
+            p3: (999 >> 7) & 0x7f
         });
         wo.examine();
         expect(lastDispatch(state)).toEqual({
-            opcode: BOT_MENU_LOC_EXAMINE,
+            opcode: MiniMenuAction.OP_LOC6,
             p1: 999,
-            p2: 12,
-            p3: 14
+            p2: 999 & 0x7f,
+            p3: (999 >> 7) & 0x7f
         });
     });
 
@@ -178,13 +173,13 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         });
     });
 
-    test('EquipmentInterfaceItem.unequip uses legacy unequip menu opcode', () => {
+    test('EquipmentInterfaceItem.unequip uses INV_BUTTON1 when routed through interact', () => {
         const state = createStubClientState();
         const api = createBotApiForTests(state);
         const item = new EquipmentInterfaceItem(api, 1688, 1, 4151, 1);
         item.unequip();
         expect(lastDispatch(state)).toEqual({
-            opcode: BOT_MENU_BANK_DEPOSIT_1,
+            opcode: MiniMenuAction.INV_BUTTON1,
             p1: 4151,
             p2: 1,
             p3: 1688

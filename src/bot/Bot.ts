@@ -4,6 +4,7 @@ import BotAPI from './api/BotAPI';
 import AutoFisher from './scripts/AutoFisher';
 import AutoKiller from './scripts/AutoKiller';
 import AutoWalker from './scripts/AutoWalker';
+import AutoWoodcutter from './scripts/AutoWoodcutter';
 import BotScript from './scripts/BotScript';
 import LumbyThievSuicide from './scripts/LumbyThievSuicide';
 import ScriptLoader from './scripts/ScriptLoader';
@@ -180,7 +181,7 @@ export default class Bot {
     constructor(client: Client) {
         this.client = client;
 
-        this.scripts = [ScriptLoader, AutoKiller, AutoFisher, LumbyThievSuicide, AutoWalker];
+        this.scripts = [ScriptLoader, AutoKiller, AutoFisher, AutoWoodcutter, LumbyThievSuicide, AutoWalker];
         this.api = new BotAPI(this);
 
         this.intervalHandle = -1;
@@ -299,6 +300,7 @@ export default class Bot {
             this.log('INFO', 'Bot.stop', `Script stopped: ${name}`);
         }
         this.currentScript = null;
+        this.api.world.stopPath();
         clearInterval(this.intervalHandle);
         console.info('Script stopped.');
     }

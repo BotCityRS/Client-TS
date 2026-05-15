@@ -8,6 +8,9 @@ const BANK_ROOT_IF = 2005;
 export default class Bank extends ItemContainer<BankInterfaceItem> {
     bankOpenState: boolean;
 
+    /** Next inventory slot to try for `depositOneIfNotKept` (avoids hammering slot 0 while UI lags). */
+    private depositScanCursor: number = 0;
+
     constructor(api: BotAPI) {
         super(api, 5382, BankInterfaceItem);
         this.bankOpenState = this.isOpen();
@@ -70,5 +73,33 @@ export default class Bank extends ItemContainer<BankInterfaceItem> {
                 item?.depositAll();
             }
         }
+    }
+
+    /**
+     * Deposits one inventory stack that is not in `keepIds` (ignores negative ids).
+     * Call once per bot tick so the client is not flooded with deposit packets.
+     * Scans from a rotating cursor so the same slot (e.g. shrimp still visible before the
+     * server updates the widget) is not retried every tick while other stacks can be cleared.
+     */
+    depositOneIfNotKept(keepIds: number[]): boolean {
+        const keep = keepIds.filter(id => id >= 0);
+        this.onOpen();
+        const size = this.api.inventory.getContainerSize();
+        if (size <= 0) {
+            this.depositScanCursor = 0;
+            return false;
+        }
+        const start = this.depositScanCursor % size;
+        for (let k = 0; k < size; k++) {
+            const s = (start + k) % size;
+            const item = this.api.inventory.getItemBySlot(s);
+            if (item && !keep.includes(item.id)) {
+                item.depositAll();
+                this.depositScanCursor = (s + 1) % size;
+                return true;
+            }
+        }
+        this.depositScanCursor = 0;
+        return false;
     }
 }

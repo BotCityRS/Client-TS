@@ -118,6 +118,36 @@ export default class ClientNPCEntity {
     }
 
     /**
+     * Invokes the non-attack NPC op whose label equals `verb` (case-insensitive).
+     * Uses the config op slot directly (not context-menu order), so it stays correct when op1/op3
+     * gaps reorder entries in the right-click list.
+     */
+    interactByOpEquals(verb: string): boolean {
+        const logFn = this.botLog();
+        const t = this.npc.type?.op;
+        if (!t) {
+            assertApi(false, logFn, 'ClientNPCEntity.interactByOpEquals', 'NPC has no type ops', { uid: this.uid, id: this.id, verb });
+            return false;
+        }
+        const want = verb.toLowerCase();
+        for (let i = 4; i >= 0; i--) {
+            const o = t[i];
+            if (o === null || o === undefined || o.toLowerCase() === 'attack') {
+                continue;
+            }
+            if (o.toLowerCase() === want) {
+                const opcode = BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
+                const { rx, rz } = this.npcInteractParams();
+                this.api.bot.log('INFO', 'ClientNPCEntity.interactByOpEquals', 'matched', { verb, opSlot: i, opcode, uid: this.uid, id: this.id });
+                this.api.doAction(opcode, this.uid, rx, rz);
+                return true;
+            }
+        }
+        this.api.bot.log('WARN', 'ClientNPCEntity.interactByOpEquals', 'no matching op', { verb, uid: this.uid, id: this.id, ops: [...t] });
+        return false;
+    }
+
+    /**
      * Invokes the first non-attack NPC op whose label contains `needle` (case-insensitive).
      * Typical use: `interactByOpIncludes('pickpocket')` or `'steal'`.
      */

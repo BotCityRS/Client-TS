@@ -32,6 +32,8 @@ type ClientAccess = {
     mapBuildBaseZ: number;
     dialogInputOpen: boolean;
     redrawChatback: boolean;
+    /** Sidebar root from `IF_OPENMAIN_SIDE` / `IF_OPENSIDE`; `-1` when using normal tab overlays only. */
+    sideModalId: number;
     sideOverlayId: number[];
     sideTab: number;
     groundObj: (LinkList<ClientObj> | null)[][][];
@@ -130,7 +132,9 @@ export default class BotScriptingSurface {
 
     isBankSidebarOpen(bankRootId: number): boolean {
         const a = acc(this.client);
-        return a.sideOverlayId[a.sideTab] === bankRootId;
+        // Bank uses `if_openmain_side(bank_main, bank_side)` → client sets `sideModalId` to bank_side root.
+        // Tab overlays (`sideOverlayId`) stay on backpack/skills etc., so checking only those misses an open bank.
+        return a.sideModalId === bankRootId || a.sideOverlayId[a.sideTab] === bankRootId;
     }
 
     setMenuSlot(opcode: number, p1: number, p2: number, p3: number): void {

@@ -13,7 +13,8 @@ type FishLocation = {
     baitReq: number,
     pathToBank: Path,
     poolIds: number[],
-    poolInteractOption: number,
+    /** Exact NPC op label from content (e.g. `Net`, `Bait`) — uses config slot, not context-menu order. */
+    poolInteractOp: string,
 };
 
 function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
@@ -52,56 +53,56 @@ export default class AutoFisher extends BotScript {
         baitReq: -1,
         pathToBank: [[3087, 3238]],
         poolIds: [327],
-        poolInteractOption: 0,
+        poolInteractOp: 'Net',
     }, {
         label: 'Draynor Bait',
         itemReq: 307,
         baitReq: 313,
         pathToBank: [[3087, 3238]],
         poolIds: [327],
-        poolInteractOption: 1,
+        poolInteractOp: 'Bait',
     }, {
         label: 'Barbarian Fly',
         itemReq: 309,
         baitReq: 314,
         pathToBank: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
         poolIds: [328],
-        poolInteractOption: 0,
+        poolInteractOp: 'Lure',
     }, {
         label: 'Barbarian Bait',
         itemReq: 307,
         baitReq: 313,
         pathToBank: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
         poolIds: [328],
-        poolInteractOption: 1,
+        poolInteractOp: 'Bait',
     }, {
         label: 'Catherby Cage',
         itemReq: 301,
         baitReq: -1,
         pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
         poolIds: [321],
-        poolInteractOption: 0,
+        poolInteractOp: 'Cage',
     }, {
         label: 'Catherby Harpoon (Swordfish)',
         itemReq: 311,
         baitReq: -1,
         pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
         poolIds: [321],
-        poolInteractOption: 1,
+        poolInteractOp: 'Harpoon',
     }, {
         label: 'Catherby Harpoon (Shark)',
         itemReq: 311,
         baitReq: -1,
         pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
         poolIds: [322],
-        poolInteractOption: 1,
+        poolInteractOp: 'Harpoon',
     }, {
         label: 'Catherby Big Net',
         itemReq: 305,
         baitReq: -1,
         pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
         poolIds: [322],
-        poolInteractOption: 0,
+        poolInteractOp: 'Net',
     }]
     location: FishLocation;
 
@@ -141,8 +142,11 @@ export default class AutoFisher extends BotScript {
     }
 
     override async update(bot: Bot) {
-        let api = bot.api;
-        api.bot.log('DEBUG', 'AutoFisher.update', 'tick', { hasInteractTimer: this.timer.hasTimer(TIMER_GAME_INTERACT) });
+        const api = bot.api;
+        api.bot.log('DEBUG', 'AutoFisher.update', 'tick', { hasInteractTimer: this.timer.hasTimer(TIMER_GAME_INTERACT), pathActive: api.world.hasPath() });
+        if (api.world.hasPath()) {
+            return;
+        }
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }
@@ -158,26 +162,43 @@ export default class AutoFisher extends BotScript {
             this.timer.setTimer(TIMER_GAME_INTERACT, 300);
             return;
         }
-        if (!api.inventory.hasItem(this.location.itemReq) || (this.location.baitReq >= 0 && !api.inventory.hasItem(this.location.baitReq)) || api.inventory.isFull()) {
-            this.timer.setTimer(TIMER_GAME_INTERACT, 2000);
+
+        const needBank =
+            !api.inventory.hasItem(this.location.itemReq) ||
+            (this.location.baitReq >= 0 && !api.inventory.hasItem(this.location.baitReq)) ||
+            api.inventory.isFull();
+
+        if (needBank) {
             if (!api.bank.isOpen()) {
+                this.timer.setTimer(TIMER_GAME_INTERACT, 1600);
                 if (!api.bank.open()) {
                     await api.world.walkPath(this.location.pathToBank);
                 }
-            } else {
-                api.bank.depositAllExcept([this.location.itemReq, this.location.baitReq])
-                if (!api.inventory.hasItem(this.location.itemReq)) {
-                    api.bank.withdraw(this.location.itemReq)
-                }
-                if (this.location.baitReq >= 0 && !api.inventory.hasItemAmount(this.location.baitReq, 100)) {
-                    api.bank.getItemById(this.location.baitReq)?.withdraw(1000)
-                }
+                return;
             }
-        } else if (!api.player.isAnimating()) {
+
+            const keepIds = [this.location.itemReq, ...(this.location.baitReq >= 0 ? [this.location.baitReq] : [])];
+            if (api.bank.depositOneIfNotKept(keepIds)) {
+                this.timer.setTimer(TIMER_GAME_INTERACT, 780);
+                return;
+            }
+
+            this.timer.setTimer(TIMER_GAME_INTERACT, 600);
+            if (!api.inventory.hasItem(this.location.itemReq)) {
+                await api.bank.withdraw(this.location.itemReq);
+                return;
+            }
+            if (this.location.baitReq >= 0 && !api.inventory.hasItemAmount(this.location.baitReq, 100)) {
+                await api.bank.getItemById(this.location.baitReq)?.withdraw(1000);
+            }
+            return;
+        }
+
+        if (!api.player.isAnimating()) {
             this.timer.setTimer(TIMER_GAME_INTERACT, 2000);
-            const nearestPool = api.npc.getNPCByIdsNearest(this.location.poolIds)
+            const nearestPool = api.npc.getNPCByIdsNearest(this.location.poolIds);
             if (nearestPool) {
-                nearestPool.interact(this.location.poolInteractOption);
+                nearestPool.interactByOpEquals(this.location.poolInteractOp);
             } else if (api.world.distanceTo(this.location.pathToBank[0][0], this.location.pathToBank[0][1]) > 10) {
                 await api.world.walkPath(this.location.pathToBank, false);
             }

@@ -1,5 +1,4 @@
 import type BotAPI from "./BotAPI";
-import Timer from "./Timer";
 import Utility from "./Utility";
 
 export type PathNode = [x: number, z: number];
@@ -21,8 +20,17 @@ export default class World {
 
     pathCompleteCallback: ((result: boolean) => void) | null = null;
 
+    private walkIntervalId: ReturnType<typeof setInterval> | null = null;
+
     constructor(api: BotAPI) {
         this.api = api;
+    }
+
+    private clearWalkInterval(): void {
+        if (this.walkIntervalId !== null) {
+            clearInterval(this.walkIntervalId);
+            this.walkIntervalId = null;
+        }
     }
 
     distanceTo(x: number, z: number) {
@@ -39,19 +47,24 @@ export default class World {
         this.api.surface.tryMoveToTile(this.api.player.getLocalX(), this.api.player.getLocalZ(), x - offsetX, z - offsetZ);
     }
 
-    stopPath() {
-        this.pathCompleteCallback?.(false);
+    stopPath(): void {
+        this.clearWalkInterval();
+        const cb = this.pathCompleteCallback;
+        this.pathCompleteCallback = null;
+        cb?.(false);
     }
 
     hasPath() {
-        return this.pathCompleteCallback != null;
+        return this.pathCompleteCallback != null || this.walkIntervalId !== null;
     }
 
-    walkPath(path: Path, traverse: boolean = true) {
+    walkPath(path: Path, traverse: boolean = true): Promise<boolean> {
         const nodeDist = 5;
         const movement = traverse ? 1 : -1;
 
         this.api.bot.log('INFO', 'World.walkPath', 'start', { traverse, nodes: path.length });
+
+        this.stopPath();
 
         const findNearestNode: (path: Path) => number = (path: Path) => {
             let nearestI = -1;
@@ -69,39 +82,42 @@ export default class World {
         let n = findNearestNode(path);
 
         return new Promise((res: (result: boolean) => void) => {
-            const timer = new Timer();
-            let walkRef: number | undefined = undefined;
-            const pathCompleteCallback = (result: boolean) => {
-                clearInterval(walkRef);
-                res(result);
-                this.pathCompleteCallback = null;
-            };
-            this.pathCompleteCallback?.(false);
-            this.pathCompleteCallback = pathCompleteCallback;
-
-            timer.defineTimer('IS_WALKING', 0);
-
-            walkRef = setInterval(() => {
-                if (n < 0 || n >= path.length) {
-                    return this.pathCompleteCallback?.(true);
-                }
-                const curNode = path[n];
-                let tries = 10;
-                const dist = this.api.world.distanceTo(curNode[0], curNode[1]);
-                this.api.bot.log('DEBUG', 'World.walkPath', 'tick', { dist, nodeIndex: n, curNode, isMoving: this.api.player.isMoving() });
-                if ((dist > nodeDist && this.api.player.isMoving()) || timer.hasTimer(0) || tries < 0) {
-                    if (dist > 100 || tries < 0) {
-                        this.pathCompleteCallback?.(false);
-                    }
+            let settled = false;
+            const finish = (result: boolean): void => {
+                if (settled) {
                     return;
                 }
-                --tries;
+                settled = true;
+                this.clearWalkInterval();
+                this.pathCompleteCallback = null;
+                res(result);
+            };
+
+            this.pathCompleteCallback = finish;
+
+            this.walkIntervalId = setInterval(() => {
+                if (this.pathCompleteCallback !== finish) {
+                    return;
+                }
+                if (n < 0 || n >= path.length) {
+                    finish(true);
+                    return;
+                }
+                const curNode = path[n]!;
+                const dist = this.api.world.distanceTo(curNode[0], curNode[1]);
+                this.api.bot.log('DEBUG', 'World.walkPath', 'tick', { dist, nodeIndex: n, curNode, isMoving: this.api.player.isMoving() });
+                if (dist > nodeDist && this.api.player.isMoving()) {
+                    return;
+                }
+                if (dist > 100) {
+                    finish(false);
+                    return;
+                }
                 if (dist <= nodeDist) {
                     n += movement;
-                    tries = 0;
                 }
                 this.api.world.moveTo(curNode[0], curNode[1]);
-            }, 500) as unknown as number;
+            }, 550);
         });
     }
 }
