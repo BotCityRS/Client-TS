@@ -1368,6 +1368,7 @@ export class Client extends GameShell {
                 this.loginscreen = 0;
                 this.loginUser = '';
                 this.loginPass = '';
+                this.onLoginCredentialsCleared();
             }
 
             while (true) {
@@ -2719,6 +2720,7 @@ export class Client extends GameShell {
         this.loginscreen = 0;
         this.loginUser = '';
         this.loginPass = '';
+        this.onLoginCredentialsCleared();
 
         InputTracking.deactivate();
         this.clearCaches();
@@ -12308,6 +12310,9 @@ export class Client extends GameShell {
         const chatInputAreaY2: number = chatInputAreaY1 + 26;
         return this.ingame && this.chatComId === -1 && !this.dialogInputOpen && !this.socialInputOpen && this.mouseX >= chatInputAreaX1 && this.mouseX <= chatInputAreaX2 && this.mouseY >= chatInputAreaY1 && this.mouseY <= chatInputAreaY2;
     }
+
+    /** Fork hook: refill login fields from bot saved accounts after credentials are cleared. */
+    protected onLoginCredentialsCleared(): void {}
 
     protected insideChatPopupArea() {
         const chatInputAreaX1: number = 17;
