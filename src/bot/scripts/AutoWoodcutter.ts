@@ -1,6 +1,7 @@
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
+import { pickFletchKnifeDialogCom } from '../api/fletchCutLogsDialogCom.js';
 import type WorldObjectEntity from '../api/base/WorldObjectEntity.js';
-import type { Path } from '../api/World';
+import type { WalkNodeId } from '../walk/walkTypes.js';
 import Timer from '../api/Timer';
 import Utility from '../api/Utility';
 import Bot from '../Bot';
@@ -26,17 +27,11 @@ const ALL_LOG_IDS = [ID_MAGIC_LOGS, ID_YEW_LOGS, ID_MAPLE_LOGS, ID_WILLOW_LOGS, 
 
 const AXE_IDS = [1349, 1351, 1353, 1355, 1357, 1359, 1361] as const;
 
-/** Unstrung bows from knife fletching (`obj.pack`). */
+/** Unstrung bows from knife fletching (`obj.pack`), highest tier first. */
 const UNSTRUNG_BOW_IDS = [
     72, 70, 68, 66, 64, 62, // magic, yew, maple
-    841, 839, 843, 845, 849, 847 // willow, oak, normal
+    60, 58, 54, 56, 50, 48 // willow, oak, normal
 ] as const;
-
-const MULTIOBJ3_SHAFT = 2800;
-const MULTIOBJ3_SHORT = 2801;
-const MULTIOBJ3_LONG = 2802;
-const MULTIOBJ2_SHORT = 142;
-const MULTIOBJ2_LONG = 143;
 
 type TreeKind = 'normal' | 'oak' | 'willow' | 'maple' | 'yew' | 'magic';
 
@@ -106,7 +101,8 @@ type WoodSpot = {
     label: string;
     treeKind: TreeKind;
     anchor: [number, number];
-    pathToBank: Path;
+    walkNodeId: WalkNodeId;
+    bankNodeId: WalkNodeId;
 };
 
 function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
@@ -223,35 +219,6 @@ function findChoppableTree(
         }
     }
     return best;
-}
-
-function pickDialogCom(
-    logId: number,
-    cutShafts: boolean,
-    cutShortbow: boolean,
-    cutLongbow: boolean
-): number | null {
-    if (logId === ID_LOGS) {
-        if (cutShafts) {
-            return MULTIOBJ3_SHAFT;
-        }
-        if (cutShortbow) {
-            return MULTIOBJ3_SHORT;
-        }
-        if (cutLongbow) {
-            return MULTIOBJ3_LONG;
-        }
-        return null;
-    }
-    if (FLETCH_LEVEL_FOR_LOG[logId]) {
-        if (cutShortbow) {
-            return MULTIOBJ2_SHORT;
-        }
-        if (cutLongbow) {
-            return MULTIOBJ2_LONG;
-        }
-    }
-    return null;
 }
 
 function fletchFlagsForAction(action: LogAction): { cutShafts: boolean; cutShortbow: boolean; cutLongbow: boolean } {
@@ -461,49 +428,57 @@ export default class AutoWoodcutter extends BotScript {
             label: 'Draynor tree',
             treeKind: 'normal',
             anchor: [3088, 3235],
-            pathToBank: [[3088, 3235], [3087, 3238]]
+            walkNodeId: 'wc_draynor_tree',
+            bankNodeId: 'bank_draynor'
         },
         {
             label: 'Draynor oak',
             treeKind: 'oak',
             anchor: [3083, 3250],
-            pathToBank: [[3083, 3250], [3087, 3238]]
+            walkNodeId: 'wc_draynor_oak',
+            bankNodeId: 'bank_draynor'
         },
         {
             label: 'Draynor willow',
             treeKind: 'willow',
             anchor: [3084, 3230],
-            pathToBank: [[3084, 3230], [3087, 3238]]
+            walkNodeId: 'wc_draynor_willow',
+            bankNodeId: 'bank_draynor'
         },
         {
             label: 'Varrock east tree',
             treeKind: 'normal',
             anchor: [3289, 3428],
-            pathToBank: [[3289, 3428], [3275, 3425], [3255, 3420]]
+            walkNodeId: 'wc_varrock_east_tree',
+            bankNodeId: 'bank_varrock_east'
         },
         {
             label: 'Varrock east oak',
             treeKind: 'oak',
             anchor: [3275, 3426],
-            pathToBank: [[3275, 3426], [3262, 3423], [3255, 3420]]
+            walkNodeId: 'wc_varrock_east_oak',
+            bankNodeId: 'bank_varrock_east'
         },
         {
             label: 'Seers maple',
             treeKind: 'maple',
             anchor: [2720, 3475],
-            pathToBank: [[2720, 3475], [2727, 3493]]
+            walkNodeId: 'wc_seers_maple',
+            bankNodeId: 'bank_seers'
         },
         {
             label: 'Edgeville yew',
             treeKind: 'yew',
             anchor: [3221, 3504],
-            pathToBank: [[3221, 3504], [3093, 3491]]
+            walkNodeId: 'wc_edgeville_yew',
+            bankNodeId: 'bank_edgeville'
         },
         {
             label: 'Seers magic',
             treeKind: 'magic',
             anchor: [2705, 3396],
-            pathToBank: [[2705, 3396], [2727, 3493]]
+            walkNodeId: 'wc_seers_magic',
+            bankNodeId: 'bank_seers'
         }
     ];
 
@@ -718,7 +693,7 @@ export default class AutoWoodcutter extends BotScript {
         const knife = api.inventory.getItemById(ID_KNIFE);
         const log = api.inventory.getItemById(logId);
         const fletch = fletchFlagsForAction(logAction);
-        const com = pickDialogCom(logId, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow);
+        const com = pickFletchKnifeDialogCom(logId, fletch.cutShafts, fletch.cutShortbow, fletch.cutLongbow);
         if (!knife || !log || com === null) {
             return false;
         }
@@ -788,7 +763,7 @@ export default class AutoWoodcutter extends BotScript {
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }
-        if (api.world.hasPath()) {
+        if (api.world.hasPath() || api.webWalk.isWalking()) {
             return;
         }
         api.tryLogin(() => {
@@ -911,7 +886,7 @@ export default class AutoWoodcutter extends BotScript {
             if (!api.bank.isOpen()) {
                 this.timer.setTimer(TIMER_GAME_INTERACT, 1600);
                 if (!api.bank.open()) {
-                    await api.world.walkPath(this.spot.pathToBank);
+                    await api.webWalk.walkToNode(this.spot.bankNodeId);
                 }
                 return;
             }
@@ -941,7 +916,7 @@ export default class AutoWoodcutter extends BotScript {
             if (tree) {
                 tree.interact(0);
             } else if (this.bankEnabled && this.spot && api.world.distanceTo(this.spot.anchor[0], this.spot.anchor[1]) > 8) {
-                await api.world.walkPath(this.spot.pathToBank, false);
+                await api.webWalk.walkToNode(this.spot.walkNodeId);
             }
         }
     }

@@ -1,6 +1,6 @@
 import type BotAPI from "../api/BotAPI";
 import Timer from "../api/Timer";
-import type { Path } from "../api/World";
+import type { WalkNodeId } from '../walk/walkTypes.js';
 import Bot from "../Bot";
 import BotScript from "./BotScript";
 
@@ -11,7 +11,8 @@ type FishLocation = {
     label: string,
     itemReq: number,
     baitReq: number,
-    pathToBank: Path,
+    walkNodeId: WalkNodeId,
+    bankNodeId: WalkNodeId,
     poolIds: number[],
     /** Exact NPC op label from content (e.g. `Net`, `Bait`) — uses config slot, not context-menu order. */
     poolInteractOp: string,
@@ -51,56 +52,64 @@ export default class AutoFisher extends BotScript {
         label: 'Draynor Small Net',
         itemReq: 303,
         baitReq: -1,
-        pathToBank: [[3087, 3238]],
+        walkNodeId: 'fish_draynor_net',
+        bankNodeId: 'bank_draynor',
         poolIds: [327],
         poolInteractOp: 'Net',
     }, {
         label: 'Draynor Bait',
         itemReq: 307,
         baitReq: 313,
-        pathToBank: [[3087, 3238]],
+        walkNodeId: 'fish_draynor_bait',
+        bankNodeId: 'bank_draynor',
         poolIds: [327],
         poolInteractOp: 'Bait',
     }, {
         label: 'Barbarian Fly',
         itemReq: 309,
         baitReq: 314,
-        pathToBank: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
+        walkNodeId: 'fish_barbarian_fly',
+        bankNodeId: 'bank_edgeville',
         poolIds: [328],
         poolInteractOp: 'Lure',
     }, {
         label: 'Barbarian Bait',
         itemReq: 307,
         baitReq: 313,
-        pathToBank: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
+        walkNodeId: 'fish_barbarian_bait',
+        bankNodeId: 'bank_edgeville',
         poolIds: [328],
         poolInteractOp: 'Bait',
     }, {
         label: 'Catherby Cage',
         itemReq: 301,
         baitReq: -1,
-        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        walkNodeId: 'fish_catherby_cage',
+        bankNodeId: 'bank_catherby',
         poolIds: [321],
         poolInteractOp: 'Cage',
     }, {
         label: 'Catherby Harpoon (Swordfish)',
         itemReq: 311,
         baitReq: -1,
-        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        walkNodeId: 'fish_catherby_harpoon_sword',
+        bankNodeId: 'bank_catherby',
         poolIds: [321],
         poolInteractOp: 'Harpoon',
     }, {
         label: 'Catherby Harpoon (Shark)',
         itemReq: 311,
         baitReq: -1,
-        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        walkNodeId: 'fish_catherby_harpoon_shark',
+        bankNodeId: 'bank_catherby',
         poolIds: [322],
         poolInteractOp: 'Harpoon',
     }, {
         label: 'Catherby Big Net',
         itemReq: 305,
         baitReq: -1,
-        pathToBank: [[2851, 3428],[2836,3434],[2821,3438],[2809,3440]],
+        walkNodeId: 'fish_catherby_big_net',
+        bankNodeId: 'bank_catherby',
         poolIds: [322],
         poolInteractOp: 'Net',
     }]
@@ -134,7 +143,7 @@ export default class AutoFisher extends BotScript {
         createField(base, 'Fishing location', elemLocation, 'Choose a preset with tool, bait, and bank route.');
     }
 
-    static buildFromHtml(base: HTMLElement) {
+    static buildFromHtml(_base: HTMLElement) {
         const elemLocation = getSelectNumber('elemLocation', 0);
         const clampedLocation = Math.max(0, Math.min(elemLocation, AutoFisher.locations.length - 1));
 
@@ -143,7 +152,7 @@ export default class AutoFisher extends BotScript {
 
     override async update(bot: Bot) {
         const api = bot.api;
-        if (api.world.hasPath()) {
+        if (api.webWalk.isWalking()) {
             return;
         }
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
@@ -171,7 +180,7 @@ export default class AutoFisher extends BotScript {
             if (!api.bank.isOpen()) {
                 this.timer.setTimer(TIMER_GAME_INTERACT, 1600);
                 if (!api.bank.open()) {
-                    await api.world.walkPath(this.location.pathToBank);
+                    await api.webWalk.walkToNode(this.location.bankNodeId);
                 }
                 return;
             }
@@ -198,8 +207,8 @@ export default class AutoFisher extends BotScript {
             const nearestPool = api.npc.getNPCByIdsNearest(this.location.poolIds);
             if (nearestPool) {
                 nearestPool.interactByOpEquals(this.location.poolInteractOp);
-            } else if (api.world.distanceTo(this.location.pathToBank[0][0], this.location.pathToBank[0][1]) > 10) {
-                await api.world.walkPath(this.location.pathToBank, false);
+            } else if (api.webWalk.distanceToNode(this.location.walkNodeId) > 10) {
+                await api.webWalk.walkToNode(this.location.walkNodeId);
             }
         }
     }

@@ -1,18 +1,13 @@
-import type BotAPI from "../api/BotAPI";
 import Timer from "../api/Timer";
-import type { Path } from "../api/World";
-import World from "../api/World";
+import { reversePath } from "../walk/walkPlanner.js";
+import { HUB_ROUTE_OPTIONS } from "../walk/walkGraph.js";
+import type { WalkNodeId } from "../walk/walkTypes.js";
 import Bot from "../Bot";
 import BotScript from "./BotScript";
 
 const TIMER_GAME_INTERACT = 0;
 const TIMER_ENABLE_RUN = 1;
 const TIMER_NOT_MOVING = 2;
-
-type WalkLocation = {
-    label: string,
-    path: Path
-};
 
 function createField(container: HTMLElement, label: string, input: HTMLElement, hint?: string) {
     const field = document.createElement('div');
@@ -47,64 +42,38 @@ function getChecked(id: string): boolean {
 
 export default class AutoWalker extends BotScript {
     timer: Timer;
-
-    static paths: WalkLocation[] = [{
-        label: 'Draynor <-> Lumbridge',
-        path: World.paths.DRAYNOR_TO_LUMBRIDGE
-    }, {
-        label: 'Draynor <-> Falador',
-        path: World.paths.DRAYNOR_TO_FALADOR
-    }, {
-        label: 'Draynor <-> Barb Village',
-        path: World.paths.VARROCK_TO_LUMBRIDGE
-    }, {
-        label: 'Barb Village <-> Varrock',
-        path: World.paths.BARB_VILLAGE_TO_VARROCK
-    }, {
-        label: 'Barb Village <-> Edgeville',
-        path: World.paths.BARB_VILLAGE_TO_EDGEVILLE
-    }, {
-        label: 'Falador <-> Barb Village',
-        path: World.paths.FALADOR_TO_BARB_VILLAGE
-    },  {
-        label: 'Falador <-> Varrock',
-        path: World.paths.FALADOR_TO_VARROCK
-    }, {
-        label: 'Falador <-> Catherby',
-        path: World.paths.FALADOR_TO_CATHERBY
-    }, {
-        label: 'Varrock <-> Lumbridge',
-        path: World.paths.VARROCK_TO_LUMBRIDGE
-    }]
-    path: WalkLocation;
+    fromNode: WalkNodeId;
+    toNode: WalkNodeId;
     traverse: boolean;
 
-    constructor(locationId: number, traverse: boolean) {
-        super('AutoWalker', true, true);
+    constructor(routeIndex: number, traverse: boolean) {
+        super('AutoWalker', true);
         this.timer = new Timer();
-        this.path = AutoWalker.paths[locationId];
+        const route = HUB_ROUTE_OPTIONS[routeIndex] ?? HUB_ROUTE_OPTIONS[0]!;
+        this.fromNode = route.from;
+        this.toNode = route.to;
         this.traverse = traverse;
 
-        this.timer.defineTimer('TIMER_GAME_INTERACT', TIMER_GAME_INTERACT)
-        this.timer.defineTimer('TIMER_ENABLE_RUN', TIMER_ENABLE_RUN)
-        this.timer.defineTimer('TIMER_NOT_MOVING', TIMER_NOT_MOVING)
+        this.timer.defineTimer('TIMER_GAME_INTERACT', TIMER_GAME_INTERACT);
+        this.timer.defineTimer('TIMER_ENABLE_RUN', TIMER_ENABLE_RUN);
+        this.timer.defineTimer('TIMER_NOT_MOVING', TIMER_NOT_MOVING);
     }
 
     static htmlSetup(base: HTMLElement) {
         const desc = document.createElement('p');
         desc.className = 'bot-description';
-        desc.textContent = 'Walks a predefined route repeatedly or in reverse until the path completes.';
+        desc.textContent = 'Walks a hub route from the walk graph until arrival.';
         base.appendChild(desc);
 
-        const elemLocation = document.createElement('select')
-        elemLocation.id = 'elemLocation'
+        const elemLocation = document.createElement('select');
+        elemLocation.id = 'elemLocation';
 
-        const elemReverse = document.createElement('input')
-        elemReverse.id = 'elemReverse'
+        const elemReverse = document.createElement('input');
+        elemReverse.id = 'elemReverse';
         elemReverse.type = 'checkbox';
         elemReverse.className = 'bot-checkbox';
 
-        AutoWalker.paths.forEach((loc, i) => {
+        HUB_ROUTE_OPTIONS.forEach((loc, i) => {
             const option = document.createElement('option');
             option.value = String(i);
             option.textContent = loc.label;
@@ -112,23 +81,23 @@ export default class AutoWalker extends BotScript {
         });
 
         createField(base, 'Route', elemLocation, 'Choose a route pair. Script stops after arrival.');
-        createField(base, 'Walk route in reverse', elemReverse, 'If enabled, route direction is swapped.');
+        createField(base, 'Walk route in reverse', elemReverse, 'If enabled, walks from destination back to start.');
     }
 
-    static buildFromHtml(base: HTMLElement) {
+    static buildFromHtml(_base: HTMLElement) {
         const elemLocation = getSelectNumber('elemLocation', 0);
-        const clampedLocation = Math.max(0, Math.min(elemLocation, AutoWalker.paths.length - 1));
-        const traverse = !getChecked('elemReverse')
+        const clampedLocation = Math.max(0, Math.min(elemLocation, HUB_ROUTE_OPTIONS.length - 1));
+        const traverse = !getChecked('elemReverse');
 
-        return new AutoWalker(clampedLocation, traverse)
+        return new AutoWalker(clampedLocation, traverse);
     }
 
     override update(bot: Bot) {
-        let api = bot.api;
+        const api = bot.api;
         if (this.timer.hasTimer(TIMER_GAME_INTERACT)) {
             return;
         }
-        api.tryLogin(()=>{
+        api.tryLogin(() => {
             api.player.enableRun();
             this.timer.setTimer(TIMER_ENABLE_RUN, 90000 + (Math.random() * 60000));
         });
@@ -136,16 +105,24 @@ export default class AutoWalker extends BotScript {
             this.timer.setTimer(TIMER_NOT_MOVING, 1200);
         }
         if (!this.timer.hasTimer(TIMER_NOT_MOVING)) {
-            api.world.walkPath(this.path.path, this.traverse).then((result: boolean) => {
+            const from = this.traverse ? this.fromNode : this.toNode;
+            const to = this.traverse ? this.toNode : this.fromNode;
+            const planned = api.webWalk.planRoute(from, to);
+            if (!planned || planned.length === 0) {
+                api.bot.log('WARN', 'AutoWalker', 'no planned route', { from, to });
+                return;
+            }
+            const path = this.traverse ? planned : reversePath(planned);
+            void api.webWalk.walkPath(path).then((result: boolean) => {
                 if (result) {
-                    api.bot.stop()
+                    api.bot.stop();
                 }
-            })
+            });
             this.timer.setTimer(TIMER_NOT_MOVING, 1200);
         }
     }
 
     override stop(bot: Bot) {
-        bot.api.world.stopPath()
+        bot.api.webWalk.stop();
     }
 }
