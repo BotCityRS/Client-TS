@@ -10,13 +10,24 @@ import {
 } from './botDebugStorage.js';
 import BotAPI from './api/BotAPI';
 import AutoFisher from './scripts/AutoFisher';
+import AutoFlaxPicker from './scripts/AutoFlaxPicker';
 import AutoKiller from './scripts/AutoKiller';
 import AutoWalker from './scripts/AutoWalker';
+import PathRecorder from './scripts/PathRecorder';
 import AutoWoodcutter from './scripts/AutoWoodcutter';
 import BotScript from './scripts/BotScript';
 import LumbyThievSuicide from './scripts/LumbyThievSuicide';
 import ScriptLoader from './scripts/ScriptLoader';
 import { formatDetail } from './api/botApiAssert.js';
+import {
+    addAccount,
+    decryptPassword,
+    findAccountById,
+    getSelectedId,
+    loadAccounts,
+    removeAccount,
+    setSelectedId
+} from './BotAccountsStore.js';
 
 /** Script list key: constructor `name` (preserved by bundle + Terser `keep_classnames`). */
 function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
@@ -37,7 +48,7 @@ export default class Bot {
 
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
-    private activeTab: 'script' | 'debug' | 'logs' = 'script';
+    private activeTab: 'script' | 'accounts' | 'debug' | 'logs' = 'script';
     private debugModeEnabled = false;
     private debugFlags: BotDebugFlags = readStoredBotDebugFlags();
 
@@ -115,22 +126,26 @@ export default class Bot {
         return script.isDebugScript === true;
     }
 
-    private setTab(tab: 'script' | 'debug' | 'logs') {
+    private setTab(tab: 'script' | 'accounts' | 'debug' | 'logs') {
         if (tab === 'debug' && !this.debugModeEnabled) {
             tab = 'script';
         }
         this.activeTab = tab;
         const scriptButton = document.getElementById('botTabScript');
+        const accountsButton = document.getElementById('botTabAccounts');
         const debugButton = document.getElementById('botTabDebug');
         const logsButton = document.getElementById('botTabLogs');
         const scriptPanel = document.getElementById('bot-script-panel');
+        const accountsPanel = document.getElementById('bot-accounts-panel');
         const debugPanel = document.getElementById('bot-debug-panel');
         const logsPanel = document.getElementById('bot-logs-panel');
 
         scriptButton?.classList.toggle('bot-tab-active', tab === 'script');
+        accountsButton?.classList.toggle('bot-tab-active', tab === 'accounts');
         debugButton?.classList.toggle('bot-tab-active', tab === 'debug');
         logsButton?.classList.toggle('bot-tab-active', tab === 'logs');
         scriptPanel?.classList.toggle('bot-panel-active', tab === 'script');
+        accountsPanel?.classList.toggle('bot-panel-active', tab === 'accounts');
         debugPanel?.classList.toggle('bot-panel-active', tab === 'debug');
         logsPanel?.classList.toggle('bot-panel-active', tab === 'logs');
     }
@@ -209,15 +224,143 @@ export default class Bot {
         return true;
     }
 
+    private setAccountStatus(message: string) {
+        const el = document.getElementById('botAccountStatus');
+        if (el) {
+            el.textContent = message;
+        }
+    }
+
+    private refreshAccountSelect(selectedId?: string | null): void {
+        const select = document.getElementById('botAccountSelect') as HTMLSelectElement | null;
+        if (!select) {
+            return;
+        }
+
+        const accounts = loadAccounts();
+        const removeBtn = document.getElementById('botAccountRemove') as HTMLButtonElement | null;
+        select.replaceChildren();
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = accounts.length === 0 ? 'No saved accounts' : 'Select an account…';
+        select.appendChild(placeholder);
+
+        for (const account of accounts) {
+            const option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.username;
+            select.appendChild(option);
+        }
+
+        let id = selectedId !== undefined ? selectedId : getSelectedId();
+        if (id && !accounts.some(a => a.id === id)) {
+            id = accounts[0]?.id ?? null;
+            setSelectedId(id);
+        }
+
+        select.value = id ?? '';
+        if (removeBtn) {
+            removeBtn.disabled = !id;
+        }
+    }
+
+    private clearLoginCredentials(): void {
+        this.api.surface.setLoginCredentials('', '');
+    }
+
+    /** Refill game login fields from the selected saved account (e.g. after logout). */
+    reinjectSelectedAccount(): Promise<void> {
+        return this.injectAccount(getSelectedId());
+    }
+
+    private async injectAccount(id: string | null): Promise<void> {
+        if (!id) {
+            this.clearLoginCredentials();
+            return;
+        }
+
+        const account = findAccountById(id);
+        if (!account) {
+            this.clearLoginCredentials();
+            return;
+        }
+
+        try {
+            const password = await decryptPassword(account);
+            this.api.surface.setLoginCredentials(account.username, password);
+        } catch {
+            this.setAccountStatus('Could not decrypt password for this account.');
+            this.clearLoginCredentials();
+        }
+    }
+
+    private async selectAccount(id: string | null): Promise<void> {
+        setSelectedId(id);
+        this.refreshAccountSelect(id);
+        await this.injectAccount(id);
+    }
+
+    private initAccountsUi(): void {
+        const select = document.getElementById('botAccountSelect') as HTMLSelectElement | null;
+        const usernameInput = document.getElementById('botAccountUsername') as HTMLInputElement | null;
+        const passwordInput = document.getElementById('botAccountPassword') as HTMLInputElement | null;
+        const addBtn = document.getElementById('botAccountAdd');
+        const removeBtn = document.getElementById('botAccountRemove');
+
+        this.refreshAccountSelect();
+        void this.reinjectSelectedAccount();
+
+        select?.addEventListener('change', () => {
+            const id = select.value || null;
+            void this.selectAccount(id);
+            this.setAccountStatus('');
+        });
+
+        addBtn?.addEventListener('click', () => {
+            void (async () => {
+                const username = usernameInput?.value ?? '';
+                const password = passwordInput?.value ?? '';
+                const result = await addAccount(username, password);
+                if (!result.ok) {
+                    this.setAccountStatus(result.error);
+                    return;
+                }
+                this.setAccountStatus('');
+                if (passwordInput) {
+                    passwordInput.value = '';
+                }
+                await this.selectAccount(result.account.id);
+            })();
+        });
+
+        removeBtn?.addEventListener('click', () => {
+            const id = select?.value;
+            if (!id) {
+                return;
+            }
+            if (!window.confirm('Remove this saved account?')) {
+                return;
+            }
+            removeAccount(id);
+            const accounts = loadAccounts();
+            const nextId = accounts[0]?.id ?? null;
+            void this.selectAccount(nextId);
+            this.setAccountStatus('');
+        });
+    }
+
     private initUi() {
         this.debugModeEnabled = readBotDebugModeEnabled();
         this.loadDebugFlags();
         this.applyDebugFlags();
 
         const scriptButton = document.getElementById('botTabScript');
+        const accountsButton = document.getElementById('botTabAccounts');
         const debugButton = document.getElementById('botTabDebug');
         const logsButton = document.getElementById('botTabLogs');
         scriptButton?.addEventListener('click', () => this.setTab('script'));
+        accountsButton?.addEventListener('click', () => this.setTab('accounts'));
         debugButton?.addEventListener('click', () => this.setTab('debug'));
         logsButton?.addEventListener('click', () => this.setTab('logs'));
 
@@ -235,12 +378,14 @@ export default class Bot {
 
         const clearBtn = document.getElementById('botLogsClear');
         clearBtn?.addEventListener('click', () => this.clearLogs());
+
+        this.initAccountsUi();
     }
 
     constructor(client: Client) {
         this.client = client;
 
-        this.scripts = [ScriptLoader, AutoKiller, AutoFisher, AutoWoodcutter, LumbyThievSuicide, AutoWalker];
+        this.scripts = [ScriptLoader, PathRecorder, AutoKiller, AutoFisher, AutoFlaxPicker, AutoWoodcutter, LumbyThievSuicide, AutoWalker];
         this.api = new BotAPI(this);
 
         this.intervalHandle = -1;
@@ -354,12 +499,14 @@ export default class Bot {
         const name = scriptRegistryKey(script.constructor as new (...args: unknown[]) => unknown);
         this.log('INFO', 'Bot.start', `Script started: ${name}`);
         const tickFunc = () => {
+            this.api.tryLogin();
             if (this.api.isLoggedIn()) {
                 this.api.surface.markClientInputActivity();
             }
             script.update(this);
         };
         script.start(this);
+        this.api.tryLogin();
         this.intervalHandle = setInterval(tickFunc, 100) as unknown as number;
         console.info('Script started.');
     }

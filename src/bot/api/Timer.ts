@@ -2,9 +2,9 @@
 export default class Timer {
     private static systemTimer: Timer | undefined;
 
-    static TIMER_LOGGING_IN = 'TIMER_LOGGING_IN';
     static TIMER_LOGIN_WAIT = 'TIMER_LOGIN_WAIT';
     static TIMER_SETUP_ACCOUNT_ON_LOGIN = 'TIMER_SETUP_ACCOUNT_ON_LOGIN';
+    static TIMER_CREDENTIAL_WARN = 'TIMER_CREDENTIAL_WARN';
 
     timers: number[];
     timerNames: string[];
@@ -25,9 +25,9 @@ export default class Timer {
         }
         this.systemTimer = new Timer();
 
-        this.systemTimer.defineTimer('TIMER_LOGGING_IN', 0);
         this.systemTimer.defineTimer('TIMER_LOGIN_WAIT', 1);
         this.systemTimer.defineTimer('TIMER_SETUP_ACCOUNT_ON_LOGIN', 2);
+        this.systemTimer.defineTimer('TIMER_CREDENTIAL_WARN', 3);
 
         return this.systemTimer;
     }

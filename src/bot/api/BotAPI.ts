@@ -12,6 +12,7 @@ import Timer from './Timer';
 import Utility from './Utility';
 import World from './World';
 import WorldObject from './WorldObject';
+import WebWalk from '../walk/WebWalk.js';
 
 export default class BotAPI {
     bot: Bot;
@@ -28,6 +29,7 @@ export default class BotAPI {
     interface: Interface;
     private systemTimer: Timer;
     world: World;
+    webWalk: WebWalk;
 
     constructor(bot: Bot) {
         this.bot = bot;
@@ -44,6 +46,7 @@ export default class BotAPI {
         this.worldObject = new WorldObject(this);
         this.groundItem = new GroundItem(this);
         this.world = new World(this);
+        this.webWalk = new WebWalk(this);
         this.systemTimer = Timer.SystemTimer();
     }
 
@@ -72,28 +75,43 @@ export default class BotAPI {
         return this.surface.ingame;
     }
 
-    tryLogin(onSuccess: () => void) {
-        const TIMER_LOGGING_IN = 0;
+    /**
+     * Attempts login when not in-game (throttled). Optional `onSuccess` runs once per few seconds after login
+     * (e.g. enable run). Called every bot tick from `Bot.start` and may also be called from scripts.
+     */
+    tryLogin(onSuccess?: () => void): void {
         const TIMER_LOGIN_WAIT = 1;
         const TIMER_SETUP_ACCOUNT_ON_LOGIN = 2;
-        if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
-            this.systemTimer.setTimer(TIMER_LOGGING_IN, 6000);
-            this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3000);
-            this.log('INFO', 'BotAPI.tryLogin', 'started login timers');
-            return;
-        }
-        if (this.systemTimer.hasTimer(TIMER_LOGGING_IN)) {
-            if (!this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_LOGIN_WAIT)) {
-                this.log('INFO', 'BotAPI.tryLogin', 'calling surface.login');
-                void this.surface.login(this.surface.loginUsername, this.surface.loginPassword, true);
-                this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 3001);
-            }
-            if (this.isLoggedIn() && !this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)) {
-                this.log('INFO', 'BotAPI.tryLogin', 'ingame; running onSuccess');
+        const TIMER_CREDENTIAL_WARN = 3;
+
+        if (this.isLoggedIn()) {
+            if (onSuccess && !this.systemTimer.hasTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN)) {
                 onSuccess();
                 this.systemTimer.setTimer(TIMER_SETUP_ACCOUNT_ON_LOGIN, 3000);
             }
             return;
         }
+
+        const username = this.surface.loginUsername.trim();
+        const password = this.surface.loginPassword;
+        if (!username || !password) {
+            if (!this.systemTimer.hasTimer(TIMER_CREDENTIAL_WARN)) {
+                this.log(
+                    'WARN',
+                    'BotAPI.tryLogin',
+                    'no login credentials — select or add an account in the Bot Accounts tab'
+                );
+                this.systemTimer.setTimer(TIMER_CREDENTIAL_WARN, 8000);
+            }
+            return;
+        }
+
+        if (this.systemTimer.hasTimer(TIMER_LOGIN_WAIT)) {
+            return;
+        }
+
+        this.log('INFO', 'BotAPI.tryLogin', 'attempting login', { username });
+        void this.surface.login(username, password, true);
+        this.systemTimer.setTimer(TIMER_LOGIN_WAIT, 5000);
     }
 }

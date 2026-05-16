@@ -1,22 +1,17 @@
 import type BotAPI from "./BotAPI";
 import Utility from "./Utility";
+import { LEGACY_WORLD_PATHS } from '../walk/walkGraph.js';
 
 export type PathNode = [x: number, z: number];
 export type Path = PathNode[];
 
+/** @deprecated Use walk graph / WebWalk API. Kept for compatibility. */
+export const WorldPaths = LEGACY_WORLD_PATHS;
+
 export default class World {
     api: BotAPI;
-    static paths: { [pathName: string]: Path } = {
-        DRAYNOR_TO_LUMBRIDGE: [[3092, 3248], [3103, 3236], [3109, 3226], [3126, 3222], [3136, 3225], [3148, 3229], [3160, 3232], [3173, 3236], [3186, 3240], [3191, 3238], [3206, 3242], [3218, 3238], [3229, 3228], [3233, 3219]],
-        DRAYNOR_TO_FALADOR: [[3080,3260],[3071,3276],[3058,3278],[3041,3281],[3025,3278],[3015,3278],[3011,3290],[3010,3292],[3006,3307],[3007,3324],[3007,3339],[3006,3353],[3006,3363]],
-        FALADOR_TO_BARB_VILLAGE: [[2993,3370],[2979,3379],[2965,3386],[2966,3396],[2976,3409],[2985,3419],[2993,3430],[3009,3432],[3024,3431],[3035,3431],[3046,3429],[3059,3427],[3069,3418],[3083,3419]],
-        BARB_VILLAGE_TO_VARROCK: [[3099,3420],[3114,3421],[3127,3418],[3140,3416],[3151,3417],[3162,3421],[3175,3429],[3183,3428],[3197,3429],[3210,3428]],
-        BARB_VILLAGE_TO_EDGEVILLE: [[3107,3433],[3095,3444],[3094,3457],[3087,3464],[3081,3476],[3087,3488],[3096,3491],[3093,3490]],
-        FALADOR_TO_VARROCK: [[2993,3370],[2979,3379],[2965,3386],[2966,3396],[2976,3409],[2985,3419],[2993,3430],[3009,3432],[3024,3431],[3035,3431],[3046,3429],[3059,3427],[3069,3418],[3083,3419],[3099,3420],[3114,3421],[3127,3418],[3140,3416],[3151,3417],[3162,3421],[3175,3429],[3183,3428],[3197,3429],[3210,3428]],
-        VARROCK_TO_LUMBRIDGE: [[3211,3411],[3211,3397],[3211,3383],[3207,3379],[3201,3373],[3202,3364],[3208,3358],[3217,3355],[3226,3349],[3227,3343],[3240,3335],[3252,3335],[3250,3317],[3240,3306],[3239,3290],[3245,3274],[3238,3261],[3229,3248],[3225,3240],[3233,3225],[3233,3219]],
-        DRAYNOR_TO_BARB_VILLAGE: [[3082,3262],[3075,3272],[3075,3284],[3073,3296],[3072,3310],[3073,3327],[3074,3339],[3075,3353],[3075,3367],[3074,3381],[3080,3395],[3085,3411],[3085,3418]],
-        FALADOR_TO_CATHERBY: [[2978,3378],[2965,3388],[2961,3402],[2958,3415],[2954,3420],[2949,3433],[2941,3450],[2935,3451],[2919,3456],[2903,3454],[2889,3446],[2890,3439],[2871,3439],[2866,3455],[2859,3465],[2856,3476],[2861,3492],[2856,3507],[2850,3497],[2851,3482],[2845,3470],[2846,3452],[2844,3435],[2827,3438],[2809,3439]],
-    };
+    /** @deprecated Use `api.webWalk` and `LEGACY_WORLD_PATHS` from walkGraph. */
+    static paths: { [pathName: string]: Path } = LEGACY_WORLD_PATHS;
 
     pathCompleteCallback: ((result: boolean) => void) | null = null;
 
@@ -33,7 +28,19 @@ export default class World {
         }
     }
 
+    private hasValidPlayerTile(): boolean {
+        if (!this.api.isLoggedIn()) {
+            return false;
+        }
+        const px = this.api.player.getLocalX();
+        const pz = this.api.player.getLocalZ();
+        return px >= 0 && pz >= 0;
+    }
+
     distanceTo(x: number, z: number) {
+        if (!this.hasValidPlayerTile()) {
+            return Number.POSITIVE_INFINITY;
+        }
         const offsetX = this.api.surface.sceneBaseTileX;
         const offsetZ = this.api.surface.sceneBaseTileZ;
         const px = this.api.player.getLocalX();
@@ -42,6 +49,9 @@ export default class World {
     }
 
     moveTo(x: number, z: number) {
+        if (!this.hasValidPlayerTile()) {
+            return;
+        }
         const offsetX = this.api.surface.sceneBaseTileX;
         const offsetZ = this.api.surface.sceneBaseTileZ;
         this.api.surface.tryMoveToTile(this.api.player.getLocalX(), this.api.player.getLocalZ(), x - offsetX, z - offsetZ);
@@ -58,7 +68,15 @@ export default class World {
         return this.pathCompleteCallback != null || this.walkIntervalId !== null;
     }
 
+    /**
+     * Walks waypoints on an interval. While logged out or before the player tile is valid, the path
+     * is paused (same Promise stays pending) and resumes automatically after reconnect.
+     */
     walkPath(path: Path, traverse: boolean = true): Promise<boolean> {
+        if (!this.api.isLoggedIn() || !this.hasValidPlayerTile() || path.length === 0) {
+            return Promise.resolve(false);
+        }
+
         const nodeDist = 5;
         const movement = traverse ? 1 : -1;
 
@@ -97,6 +115,10 @@ export default class World {
 
             this.walkIntervalId = setInterval(() => {
                 if (this.pathCompleteCallback !== finish) {
+                    return;
+                }
+                // Pause until in-game again (logout / reconnect); do not abort the path.
+                if (!this.api.isLoggedIn() || !this.hasValidPlayerTile()) {
                     return;
                 }
                 if (n < 0 || n >= path.length) {
