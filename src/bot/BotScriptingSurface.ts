@@ -108,6 +108,12 @@ export default class BotScriptingSurface {
         return acc(this.client).loginPass;
     }
 
+    setLoginCredentials(username: string, password: string): void {
+        const a = acc(this.client);
+        a.loginUser = username.substring(0, 12);
+        a.loginPass = password.substring(0, 20);
+    }
+
     get dialogInputOpen(): boolean {
         return acc(this.client).dialogInputOpen;
     }
