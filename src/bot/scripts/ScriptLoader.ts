@@ -103,42 +103,109 @@ export default class ScriptLoader extends BotScript {
         container.replaceChildren();
 
         const sources = ScriptLoader.cdnManager.listSources();
+        const select = document.createElement('select');
+        select.id = 'botCdnSources';
+        select.size = Math.min(Math.max(sources.length, 2), 8);
+        select.setAttribute('aria-label', 'CDN sources');
+
         for (const source of sources) {
-            const row = document.createElement('div');
-            row.className = 'bot-field';
-
-            const label = document.createElement('div');
-            label.className = 'bot-label';
-            label.textContent = ScriptLoader.formatSourceLabel(source);
-            row.appendChild(label);
-
-            if (source.manifestUrl) {
-                const url = document.createElement('small');
-                url.className = 'bot-hint';
-                url.textContent = source.manifestUrl;
-                row.appendChild(url);
-            }
-
-            if (source.removable) {
-                const remove = document.createElement('button');
-                remove.className = 'bot-button bot-button-danger';
-                remove.type = 'button';
-                remove.textContent = 'Remove Source';
-                remove.onclick = () => {
-                    ScriptLoader.cdnManager.removeSource(source.id);
-                    ScriptLoader.renderCdnSources(container);
-                    void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
-                };
-                row.appendChild(remove);
-            }
-
-            container.appendChild(row);
+            const option = document.createElement('option');
+            option.value = source.id;
+            option.textContent = ScriptLoader.formatSourceLabel(source);
+            select.appendChild(option);
         }
+
+        const details = document.createElement('div');
+        details.className = 'bot-cdn-source-details';
+
+        const sourceType = document.createElement('div');
+        sourceType.className = 'bot-label';
+        details.appendChild(sourceType);
+
+        const sourceUrl = document.createElement('small');
+        sourceUrl.className = 'bot-hint';
+        details.appendChild(sourceUrl);
+
+        const remove = document.createElement('button');
+        remove.className = 'bot-button bot-button-danger';
+        remove.type = 'button';
+        remove.textContent = 'Remove selected';
+
+        const updateSelection = () => {
+            const source = sources.find(candidate => candidate.id === select.value) ?? sources[0];
+            if (!source) {
+                sourceType.textContent = 'No CDN sources configured.';
+                sourceUrl.textContent = '';
+                remove.disabled = true;
+                return;
+            }
+
+            select.value = source.id;
+            sourceType.textContent = `${source.name} is a ${source.removable ? 'custom' : 'default'} ${source.type} source.`;
+            sourceUrl.textContent = source.manifestUrl ?? 'Local browser storage';
+            remove.disabled = !source.removable;
+        };
+
+        remove.onclick = () => {
+            const source = sources.find(candidate => candidate.id === select.value);
+            if (!source || !source.removable) {
+                return;
+            }
+            ScriptLoader.cdnManager.removeSource(source.id);
+            ScriptLoader.renderCdnSources(container);
+            void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
+        };
+
+        select.onchange = updateSelection;
+        container.appendChild(select);
+        container.appendChild(details);
+        container.appendChild(remove);
+        updateSelection();
     }
 
     private static formatSourceLabel(source: CDNSource): string {
         const protection = source.removable ? 'custom' : 'default';
         return `${source.name} (${source.type}, ${protection})`;
+    }
+
+    static renderCdnPanel(base: HTMLElement) {
+        base.replaceChildren();
+
+        const intro = document.createElement('p');
+        intro.className = 'bot-description';
+        intro.textContent = 'Load scripts from the local CDN and remote manifest sources.';
+        base.appendChild(intro);
+
+        const sourcesSection = createSection(base, 'CDN sources');
+        const cdnSourceList = document.createElement('div');
+        cdnSourceList.id = 'botCdnSourcesList';
+        sourcesSection.appendChild(cdnSourceList);
+        ScriptLoader.renderCdnSources(cdnSourceList);
+
+        const sourceName = createInput('botCdnSourceName', 'Community scripts');
+        const sourceUrl = createInput('botCdnSourceUrl', 'https://owner.github.io/repo/manifest.json');
+        createField(sourcesSection, 'Source name', sourceName);
+        createField(sourcesSection, 'Manifest URL', sourceUrl, 'GitHub Pages manifests must be served over HTTPS.');
+
+        const addSourceButton = document.createElement('button');
+        addSourceButton.className = 'bot-button';
+        addSourceButton.type = 'button';
+        addSourceButton.textContent = 'Add Source';
+        addSourceButton.onclick = () => {
+            try {
+                ScriptLoader.cdnManager.addSource(sourceName.value, sourceUrl.value);
+                sourceName.value = '';
+                sourceUrl.value = '';
+                ScriptLoader.renderCdnSources(cdnSourceList);
+                void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
+            } catch (err) {
+                window.alert(err instanceof Error ? err.message : String(err));
+            }
+        };
+        const sourceActions = document.createElement('div');
+        sourceActions.className = 'bot-actions';
+        sourceActions.appendChild(addSourceButton);
+        sourcesSection.appendChild(sourceActions);
     }
 
     static htmlSetup(base: HTMLElement) {
@@ -176,37 +243,6 @@ export default class ScriptLoader extends BotScript {
         intro.className = 'bot-description';
         intro.textContent = 'Create and save custom scripts to the local CDN. Existing script names are overwritten.';
         base.appendChild(intro);
-
-        const sourcesSection = createSection(base, 'CDN sources', 'Load scripts from the local CDN and remote manifest sources.');
-        const cdnSourceList = document.createElement('div');
-        cdnSourceList.id = 'cdnSourcesList';
-        sourcesSection.appendChild(cdnSourceList);
-        ScriptLoader.renderCdnSources(cdnSourceList);
-
-        const sourceName = createInput('cdnSourceName', 'Community scripts');
-        const sourceUrl = createInput('cdnSourceUrl', 'https://owner.github.io/repo/manifest.json');
-        createField(sourcesSection, 'Source name', sourceName);
-        createField(sourcesSection, 'Manifest URL', sourceUrl, 'GitHub Pages manifests must be served over HTTPS.');
-
-        const addSourceButton = document.createElement('button');
-        addSourceButton.className = 'bot-button';
-        addSourceButton.type = 'button';
-        addSourceButton.textContent = 'Add Source';
-        addSourceButton.onclick = () => {
-            try {
-                ScriptLoader.cdnManager.addSource(sourceName.value, sourceUrl.value);
-                sourceName.value = '';
-                sourceUrl.value = '';
-                ScriptLoader.renderCdnSources(cdnSourceList);
-                void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
-            } catch (err) {
-                window.alert(err instanceof Error ? err.message : String(err));
-            }
-        };
-        const sourceActions = document.createElement('div');
-        sourceActions.className = 'bot-actions';
-        sourceActions.appendChild(addSourceButton);
-        sourcesSection.appendChild(sourceActions);
 
         const basicsSection = createSection(base, 'Script identity');
         createField(basicsSection, 'Script name', scriptName, 'Used as the dropdown entry and local CDN key.');

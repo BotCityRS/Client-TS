@@ -36,6 +36,7 @@ function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): str
 }
 
 const MAX_LOG_LINES = 4000;
+type BotTab = 'script' | 'cdn' | 'accounts' | 'debug' | 'logs';
 
 export default class Bot {
     client: Client;
@@ -49,7 +50,7 @@ export default class Bot {
 
     _injStartScript?: () => void;
     _injDeleteScript?: () => void;
-    private activeTab: 'script' | 'accounts' | 'debug' | 'logs' = 'script';
+    private activeTab: BotTab = 'script';
     private debugModeEnabled = false;
     private debugFlags: BotDebugFlags = readStoredBotDebugFlags();
 
@@ -129,25 +130,29 @@ export default class Bot {
         return script.isDebugScript === true;
     }
 
-    private setTab(tab: 'script' | 'accounts' | 'debug' | 'logs') {
+    private setTab(tab: BotTab) {
         if (tab === 'debug' && !this.debugModeEnabled) {
             tab = 'script';
         }
         this.activeTab = tab;
         const scriptButton = document.getElementById('botTabScript');
+        const cdnButton = document.getElementById('botTabCdn');
         const accountsButton = document.getElementById('botTabAccounts');
         const debugButton = document.getElementById('botTabDebug');
         const logsButton = document.getElementById('botTabLogs');
         const scriptPanel = document.getElementById('bot-script-panel');
+        const cdnPanel = document.getElementById('bot-cdn-panel');
         const accountsPanel = document.getElementById('bot-accounts-panel');
         const debugPanel = document.getElementById('bot-debug-panel');
         const logsPanel = document.getElementById('bot-logs-panel');
 
         scriptButton?.classList.toggle('bot-tab-active', tab === 'script');
+        cdnButton?.classList.toggle('bot-tab-active', tab === 'cdn');
         accountsButton?.classList.toggle('bot-tab-active', tab === 'accounts');
         debugButton?.classList.toggle('bot-tab-active', tab === 'debug');
         logsButton?.classList.toggle('bot-tab-active', tab === 'logs');
         scriptPanel?.classList.toggle('bot-panel-active', tab === 'script');
+        cdnPanel?.classList.toggle('bot-panel-active', tab === 'cdn');
         accountsPanel?.classList.toggle('bot-panel-active', tab === 'accounts');
         debugPanel?.classList.toggle('bot-panel-active', tab === 'debug');
         logsPanel?.classList.toggle('bot-panel-active', tab === 'logs');
@@ -353,16 +358,26 @@ export default class Bot {
         });
     }
 
+    private initCdnUi(): void {
+        const panel = document.getElementById('bot-cdn-panel');
+        if (!panel) {
+            return;
+        }
+        ScriptLoader.renderCdnPanel(panel);
+    }
+
     private initUi() {
         this.debugModeEnabled = readBotDebugModeEnabled();
         this.loadDebugFlags();
         this.applyDebugFlags();
 
         const scriptButton = document.getElementById('botTabScript');
+        const cdnButton = document.getElementById('botTabCdn');
         const accountsButton = document.getElementById('botTabAccounts');
         const debugButton = document.getElementById('botTabDebug');
         const logsButton = document.getElementById('botTabLogs');
         scriptButton?.addEventListener('click', () => this.setTab('script'));
+        cdnButton?.addEventListener('click', () => this.setTab('cdn'));
         accountsButton?.addEventListener('click', () => this.setTab('accounts'));
         debugButton?.addEventListener('click', () => this.setTab('debug'));
         logsButton?.addEventListener('click', () => this.setTab('logs'));
@@ -382,6 +397,7 @@ export default class Bot {
         const clearBtn = document.getElementById('botLogsClear');
         clearBtn?.addEventListener('click', () => this.clearLogs());
 
+        this.initCdnUi();
         this.initAccountsUi();
     }
 
