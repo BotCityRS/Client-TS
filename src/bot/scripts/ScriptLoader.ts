@@ -1,4 +1,5 @@
 import Bot from '../Bot';
+import CDNManager, { type CDNSource } from './CDNManager';
 import BotScript from './BotScript';
 
 function createSection(container: HTMLElement, title: string, description?: string): HTMLElement {
@@ -51,6 +52,15 @@ function createScriptArea(id: string, value: string): HTMLTextAreaElement {
     return area;
 }
 
+function createInput(id: string, placeholder: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = id;
+    input.placeholder = placeholder;
+    input.className = 'bot-input';
+    return input;
+}
+
 function getInputValue(id: string): string {
     return (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
 }
@@ -71,6 +81,8 @@ function toClassIdentifier(scriptName: string): string {
 }
 
 export default class ScriptLoader extends BotScript {
+    static cdnManager = new CDNManager();
+
     scriptStart: string;
     scriptUpdate: string;
     scriptEnd: string;
@@ -85,6 +97,48 @@ export default class ScriptLoader extends BotScript {
         this.start = new Function('bot', scriptStart) as (bot: Bot) => void;
         this.update = new Function('bot', scriptUpdate) as (bot: Bot) => void;
         this.stop = new Function('bot', scriptEnd) as (bot: Bot) => void;
+    }
+
+    private static renderCdnSources(container: HTMLElement) {
+        container.replaceChildren();
+
+        const sources = ScriptLoader.cdnManager.listSources();
+        for (const source of sources) {
+            const row = document.createElement('div');
+            row.className = 'bot-field';
+
+            const label = document.createElement('div');
+            label.className = 'bot-label';
+            label.textContent = ScriptLoader.formatSourceLabel(source);
+            row.appendChild(label);
+
+            if (source.manifestUrl) {
+                const url = document.createElement('small');
+                url.className = 'bot-hint';
+                url.textContent = source.manifestUrl;
+                row.appendChild(url);
+            }
+
+            if (source.removable) {
+                const remove = document.createElement('button');
+                remove.className = 'bot-button bot-button-danger';
+                remove.type = 'button';
+                remove.textContent = 'Remove Source';
+                remove.onclick = () => {
+                    ScriptLoader.cdnManager.removeSource(source.id);
+                    ScriptLoader.renderCdnSources(container);
+                    void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
+                };
+                row.appendChild(remove);
+            }
+
+            container.appendChild(row);
+        }
+    }
+
+    private static formatSourceLabel(source: CDNSource): string {
+        const protection = source.removable ? 'custom' : 'default';
+        return `${source.name} (${source.type}, ${protection})`;
     }
 
     static htmlSetup(base: HTMLElement) {
@@ -106,7 +160,8 @@ export default class ScriptLoader extends BotScript {
 
         const saveScriptButton = document.createElement('button');
         saveScriptButton.className = 'bot-button';
-        saveScriptButton.innerText = 'Save Script';
+        saveScriptButton.type = 'button';
+        saveScriptButton.innerText = 'Save to Local CDN';
         saveScriptButton.onclick = () => {
             const scName = scriptName.value.trim();
             if (!scName) {
@@ -119,11 +174,42 @@ export default class ScriptLoader extends BotScript {
 
         const intro = document.createElement('p');
         intro.className = 'bot-description';
-        intro.textContent = 'Create and save custom scripts. Existing script names are overwritten.';
+        intro.textContent = 'Create and save custom scripts to the local CDN. Existing script names are overwritten.';
         base.appendChild(intro);
 
+        const sourcesSection = createSection(base, 'CDN sources', 'Load scripts from the local CDN and remote manifest sources.');
+        const cdnSourceList = document.createElement('div');
+        cdnSourceList.id = 'cdnSourcesList';
+        sourcesSection.appendChild(cdnSourceList);
+        ScriptLoader.renderCdnSources(cdnSourceList);
+
+        const sourceName = createInput('cdnSourceName', 'Community scripts');
+        const sourceUrl = createInput('cdnSourceUrl', 'https://owner.github.io/repo/manifest.json');
+        createField(sourcesSection, 'Source name', sourceName);
+        createField(sourcesSection, 'Manifest URL', sourceUrl, 'GitHub Pages manifests must be served over HTTPS.');
+
+        const addSourceButton = document.createElement('button');
+        addSourceButton.className = 'bot-button';
+        addSourceButton.type = 'button';
+        addSourceButton.textContent = 'Add Source';
+        addSourceButton.onclick = () => {
+            try {
+                ScriptLoader.cdnManager.addSource(sourceName.value, sourceUrl.value);
+                sourceName.value = '';
+                sourceUrl.value = '';
+                ScriptLoader.renderCdnSources(cdnSourceList);
+                void (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot?.reloadScripts();
+            } catch (err) {
+                window.alert(err instanceof Error ? err.message : String(err));
+            }
+        };
+        const sourceActions = document.createElement('div');
+        sourceActions.className = 'bot-actions';
+        sourceActions.appendChild(addSourceButton);
+        sourcesSection.appendChild(sourceActions);
+
         const basicsSection = createSection(base, 'Script identity');
-        createField(basicsSection, 'Script name', scriptName, 'Used as the dropdown entry and local storage key.');
+        createField(basicsSection, 'Script name', scriptName, 'Used as the dropdown entry and local CDN key.');
 
         const uiSection = createSection(base, 'UI configuration', 'Optional setup for custom parameter fields.');
         createField(uiSection, 'htmlSetup(base)', htmlSetupScript, 'Runs when script is selected to build the parameter UI.');

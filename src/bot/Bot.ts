@@ -18,6 +18,7 @@ import AutoWoodcutter from './scripts/AutoWoodcutter';
 import BotScript from './scripts/BotScript';
 import LumbyThievSuicide from './scripts/LumbyThievSuicide';
 import ScriptLoader from './scripts/ScriptLoader';
+import { LOCAL_CDN_SOURCE_ID, type BotScriptDefinition } from './scripts/CDNManager';
 import { formatDetail } from './api/botApiAssert.js';
 import {
     addAccount,
@@ -53,6 +54,8 @@ export default class Bot {
     private debugFlags: BotDebugFlags = readStoredBotDebugFlags();
 
     private logLines: string[] = [];
+    private reloadScriptsRun = 0;
+    private localScriptNamesByRegistryKey = new Map<string, string>();
 
     isDebugModeEnabled(): boolean {
         return this.debugModeEnabled;
@@ -188,7 +191,7 @@ export default class Bot {
         if (!enabled && this.currentScript && this.isDebugScriptInstance(this.currentScript)) {
             this.stop();
         }
-        this.reloadScripts();
+        void this.reloadScripts();
         this.applyDebugFlags();
     }
 
@@ -414,7 +417,8 @@ export default class Bot {
                 };
                 const del = document.getElementById('deleteBot');
                 if (del) {
-                    del.hidden = new this.scripts[i]().isSystemScript;
+                    const key = scriptRegistryKey(this.scripts[i]);
+                    del.hidden = new this.scripts[i]().isSystemScript || !this.localScriptNamesByRegistryKey.has(key);
                 }
                 this.setSummary(`Configure ${target} and click Start Bot.`);
                 break;
@@ -427,48 +431,31 @@ export default class Bot {
             window.alert('Enable debug mode to create or edit custom scripts.');
             return;
         }
-        localStorage.setItem('localScript_' + name, JSON.stringify({
+        ScriptLoader.cdnManager.saveLocalScript({
             name,
             startScript,
             updateScript,
             endScript,
             htmlSetupScript,
             buildFromHtmlScript,
-        }));
-        this.reloadScripts();
+        });
+        void this.reloadScripts();
     }
 
     deleteScript(scName: string) {
-        localStorage.removeItem('localScript_' + scName);
-        this.reloadScripts();
+        const localName = this.localScriptNamesByRegistryKey.get(scName);
+        if (!localName) {
+            this.log('WARN', 'Bot.deleteScript', 'Only local CDN scripts can be deleted from the script dropdown', { script: scName });
+            return;
+        }
+
+        ScriptLoader.cdnManager.deleteLocalScript(localName);
+        void this.reloadScripts();
     }
 
-    reloadScripts() {
+    private renderScriptOptions(previousSelection?: string) {
         const elemBotScripts = document.getElementById('botscripts');
-        const previousSelection = (elemBotScripts as HTMLSelectElement | null)?.value;
-
         elemBotScripts?.replaceChildren();
-
-        for (let i = this.scripts.length - 1; i >= 0; i--) {
-            if (!new this.scripts[i]().isSystemScript) {
-                this.scripts.splice(i, 1);
-            }
-        }
-
-        if (this.debugModeEnabled) {
-            for (let i = 0; i < localStorage.length; ++i) {
-                const lsKey = localStorage.key(i);
-                if (lsKey?.startsWith('localScript_')) {
-                    const raw = localStorage.getItem(lsKey);
-                    if (!raw) {
-                        continue;
-                    }
-                    const scData = JSON.parse(raw);
-                    const builtClass = ScriptLoader.createScriptClass(scData.name, scData.startScript, scData.updateScript, scData.endScript, scData.htmlSetupScript, scData.buildFromHtmlScript);
-                    this.scripts.push(builtClass);
-                }
-            }
-        }
 
         this.scripts.forEach(script => {
             if (!this.scriptVisibleInUi(script)) {
@@ -487,6 +474,78 @@ export default class Bot {
         }
 
         this.setScriptChoice();
+    }
+
+    private buildCdnScriptClass(script: BotScriptDefinition): new () => BotScript {
+        return ScriptLoader.createScriptClass(
+            script.name,
+            script.startScript,
+            script.updateScript,
+            script.endScript,
+            script.htmlSetupScript,
+            script.buildFromHtmlScript
+        ) as new () => BotScript;
+    }
+
+    async reloadScripts(): Promise<void> {
+        const reloadRun = ++this.reloadScriptsRun;
+        const elemBotScripts = document.getElementById('botscripts');
+        const previousSelection = (elemBotScripts as HTMLSelectElement | null)?.value;
+
+        for (let i = this.scripts.length - 1; i >= 0; i--) {
+            if (!new this.scripts[i]().isSystemScript) {
+                this.scripts.splice(i, 1);
+            }
+        }
+        this.localScriptNamesByRegistryKey.clear();
+
+        this.renderScriptOptions(previousSelection);
+
+        const systemKeys = new Set(this.scripts.map(script => scriptRegistryKey(script)));
+        const cdnScripts = new Map<string, new () => BotScript>();
+        const results = await ScriptLoader.cdnManager.loadScripts();
+        if (reloadRun !== this.reloadScriptsRun) {
+            return;
+        }
+
+        for (const result of results) {
+            if (result.source.id === LOCAL_CDN_SOURCE_ID && !this.debugModeEnabled) {
+                continue;
+            }
+
+            if (result.error) {
+                this.log('WARN', 'Bot.reloadScripts', 'Failed to load CDN source', {
+                    source: result.source.name,
+                    error: result.error
+                });
+                continue;
+            }
+
+            for (const script of result.scripts) {
+                try {
+                    const builtClass = this.buildCdnScriptClass(script);
+                    const key = scriptRegistryKey(builtClass);
+                    if (systemKeys.has(key)) {
+                        this.log('WARN', 'Bot.reloadScripts', 'Skipping CDN script that conflicts with a system script', { script: key });
+                        continue;
+                    }
+
+                    cdnScripts.set(key, builtClass);
+                    if (result.source.id === LOCAL_CDN_SOURCE_ID) {
+                        this.localScriptNamesByRegistryKey.set(key, script.name);
+                    }
+                } catch (err) {
+                    this.log('ERROR', 'Bot.reloadScripts', 'Failed to compile CDN script', {
+                        script: script.name,
+                        source: result.source.name,
+                        error: err instanceof Error ? err.message : String(err)
+                    });
+                }
+            }
+        }
+
+        this.scripts.push(...cdnScripts.values());
+        this.renderScriptOptions(previousSelection);
     }
 
     start(script: BotScript) {
