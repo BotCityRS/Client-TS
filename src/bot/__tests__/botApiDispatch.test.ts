@@ -17,7 +17,7 @@ beforeAll(() => {
     realSetInterval = globalThis.setInterval;
     globalThis.setInterval = ((_fn: TimerHandler, _ms?: number, ..._args: unknown[]) => {
         return -1 as unknown as ReturnType<typeof setInterval>;
-    }) as typeof setInterval;
+    }) as unknown as typeof setInterval;
 });
 
 afterAll(() => {
@@ -124,6 +124,35 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         });
     });
 
+    test('WorldObjectEntity interacts by loc op label', () => {
+        const state = createStubClientState();
+        const api = createBotApiForTests(state);
+        const loc = { op: [null, 'Bank', null, null, null] } as LocType;
+        const wo = new WorldObjectEntity(api, 2213, 12, 14, 999, loc);
+        expect(wo.interactByOpEquals('bank')).toBe(true);
+        expect(lastDispatch(state)).toEqual({
+            opcode: MiniMenuAction.OP_LOC2,
+            p1: 999,
+            p2: 999 & 0x7f,
+            p3: (999 >> 7) & 0x7f
+        });
+    });
+
+    test('bank.open can use loc bank op fallbacks', () => {
+        const state = createStubClientState();
+        const api = createBotApiForTests(state);
+        const loc = { op: [null, 'Bank', null, null, null] } as LocType;
+        const wo = new WorldObjectEntity(api, 2213, 12, 14, 999, loc);
+        api.worldObject.getNearestByIdPath = () => wo;
+        expect(api.bank.open()).toBe(true);
+        expect(lastDispatch(state)).toEqual({
+            opcode: MiniMenuAction.OP_LOC2,
+            p1: 999,
+            p2: 999 & 0x7f,
+            p3: (999 >> 7) & 0x7f
+        });
+    });
+
     test('ClientNPCEntity.examine uses OP_NPC6', () => {
         const state = createStubClientState();
         const api = createBotApiForTests(state);
@@ -154,6 +183,29 @@ describe('BotAPI → menu dispatch (stub client)', () => {
         ent.interact(0);
         expect(lastDispatch(state)).toEqual({
             opcode: MiniMenuAction.OP_NPC5,
+            p1: 5,
+            p2: 1,
+            p3: 2
+        });
+    });
+
+    test('bank.open can use banker NPC bank op fallbacks', () => {
+        const state = createStubClientState();
+        const api = createBotApiForTests(state);
+        api.worldObject.getNearestByIdPath = () => null;
+        api.worldObject.getNearestById = () => null;
+        const npcStub = {
+            routeX: new Int32Array([1]),
+            routeZ: new Int32Array([2]),
+            type: { id: 494, op: [null, null, 'Bank', null, null], vislevel: 1 },
+            faceEntity: -1,
+            combatCycle: 0
+        } as unknown as ClientNpc;
+        const ent = new ClientNPCEntity(api, 5, npcStub);
+        api.npc.getNPCByIdsNearest = () => ent;
+        expect(api.bank.open()).toBe(true);
+        expect(lastDispatch(state)).toEqual({
+            opcode: MiniMenuAction.OP_NPC3,
             p1: 5,
             p2: 1,
             p3: 2

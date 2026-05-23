@@ -39,6 +39,73 @@ export default class WorldObjectEntity {
         this.api.doAction(opcode, this.typecode, lx, lz);
     }
 
+    interactByOpEquals(verb: string): boolean {
+        const ops = this.locType.op;
+        if (!ops) {
+            this.api.bot.log('WARN', 'WorldObjectEntity.interactByOpEquals', 'loc has no ops', {
+                id: this.id,
+                verb
+            });
+            return false;
+        }
+        const want = verb.toLowerCase();
+        for (let i = 4; i >= 0; i--) {
+            const op = ops[i];
+            if (op === null || op === undefined) {
+                continue;
+            }
+            if (op.toLowerCase() === want) {
+                this.api.bot.log('INFO', 'WorldObjectEntity.interactByOpEquals', 'matched', {
+                    id: this.id,
+                    verb,
+                    opSlot: i
+                });
+                this.interact(i);
+                return true;
+            }
+        }
+        this.api.bot.log('WARN', 'WorldObjectEntity.interactByOpEquals', 'no matching op', {
+            id: this.id,
+            verb,
+            ops: [...ops]
+        });
+        return false;
+    }
+
+    interactByOpIncludes(needle: string): boolean {
+        const ops = this.locType.op;
+        if (!ops) {
+            this.api.bot.log('WARN', 'WorldObjectEntity.interactByOpIncludes', 'loc has no ops', {
+                id: this.id,
+                needle
+            });
+            return false;
+        }
+        const lower = needle.toLowerCase();
+        for (let i = 4; i >= 0; i--) {
+            const op = ops[i];
+            if (op === null || op === undefined) {
+                continue;
+            }
+            if (op.toLowerCase().includes(lower)) {
+                this.api.bot.log('INFO', 'WorldObjectEntity.interactByOpIncludes', 'matched', {
+                    id: this.id,
+                    needle,
+                    verb: op,
+                    opSlot: i
+                });
+                this.interact(i);
+                return true;
+            }
+        }
+        this.api.bot.log('WARN', 'WorldObjectEntity.interactByOpIncludes', 'no matching op', {
+            id: this.id,
+            needle,
+            ops: [...ops]
+        });
+        return false;
+    }
+
     examine() {
         const lx = this.typecode & 0x7f;
         const lz = (this.typecode >> 7) & 0x7f;

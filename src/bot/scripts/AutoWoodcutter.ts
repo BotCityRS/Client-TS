@@ -102,6 +102,7 @@ type WoodSpot = {
     label: string;
     treeKind: TreeKind;
     anchor: [number, number];
+    anchorMaxDist?: number;
     walkNodeId: WalkNodeId;
     bankNodeId: WalkNodeId;
 };
@@ -493,10 +494,59 @@ export default class AutoWoodcutter extends BotScript {
             bankNodeId: 'bank_varrock_east'
         },
         {
+            label: 'Varrock north yew',
+            treeKind: 'yew',
+            anchor: [3205, 3502],
+            walkNodeId: 'wc_varrock_north_yew',
+            bankNodeId: 'bank_varrock_west'
+        },
+        {
+            label: 'Falador south yew',
+            treeKind: 'yew',
+            anchor: [2997, 3312],
+            walkNodeId: 'wc_falador_south_yew',
+            bankNodeId: 'bank_falador_east'
+        },
+        {
+            label: 'Catherby oak',
+            treeKind: 'oak',
+            anchor: [2788, 3440],
+            walkNodeId: 'wc_catherby_oak',
+            bankNodeId: 'bank_catherby'
+        },
+        {
+            label: 'Catherby willow',
+            treeKind: 'willow',
+            anchor: [2783, 3428],
+            walkNodeId: 'wc_catherby_willow',
+            bankNodeId: 'bank_catherby'
+        },
+        {
+            label: 'Catherby yew',
+            treeKind: 'yew',
+            anchor: [2760, 3434],
+            walkNodeId: 'wc_catherby_yew',
+            bankNodeId: 'bank_catherby'
+        },
+        {
             label: 'Seers maple',
             treeKind: 'maple',
             anchor: [2720, 3475],
             walkNodeId: 'wc_seers_maple',
+            bankNodeId: 'bank_seers'
+        },
+        {
+            label: 'Seers willow',
+            treeKind: 'willow',
+            anchor: [2710, 3504],
+            walkNodeId: 'wc_seers_willow',
+            bankNodeId: 'bank_seers'
+        },
+        {
+            label: 'Seers yew',
+            treeKind: 'yew',
+            anchor: [2707, 3465],
+            walkNodeId: 'wc_seers_yew',
             bankNodeId: 'bank_seers'
         },
         {
@@ -512,6 +562,38 @@ export default class AutoWoodcutter extends BotScript {
             anchor: [2705, 3396],
             walkNodeId: 'wc_seers_magic',
             bankNodeId: 'bank_seers'
+        },
+        {
+            label: 'Seers magic north',
+            treeKind: 'magic',
+            anchor: [2692, 3425],
+            anchorMaxDist: 12,
+            walkNodeId: 'wc_seers_magic_north',
+            bankNodeId: 'bank_seers'
+        },
+        {
+            label: 'Gnome Stronghold magic west',
+            treeKind: 'magic',
+            anchor: [2371, 3426],
+            anchorMaxDist: 10,
+            walkNodeId: 'wc_gnome_magic_west',
+            bankNodeId: 'bank_gnome_stronghold'
+        },
+        {
+            label: 'Gnome Stronghold magic central',
+            treeKind: 'magic',
+            anchor: [2432, 3410],
+            anchorMaxDist: 10,
+            walkNodeId: 'wc_gnome_magic_central',
+            bankNodeId: 'bank_gnome_stronghold'
+        },
+        {
+            label: 'Gnome Stronghold magic east',
+            treeKind: 'magic',
+            anchor: [2490, 3414],
+            anchorMaxDist: 10,
+            walkNodeId: 'wc_gnome_magic_east',
+            bankNodeId: 'bank_gnome_stronghold'
         }
     ];
 
@@ -1068,7 +1150,7 @@ export default class AutoWoodcutter extends BotScript {
 
         this.timer.setTimer(TIMER_GAME_INTERACT, 2000);
         const anchor = this.bankEnabled && this.spot ? this.spot.anchor : this.getNoBankRadiusAnchor(api);
-        const anchorMaxDist = this.bankEnabled && this.spot ? 14 : this.maxRadius;
+        const anchorMaxDist = this.bankEnabled && this.spot ? (this.spot.anchorMaxDist ?? 14) : this.maxRadius;
         const chopTreeKind = this.bankEnabled && this.spot ? this.spot.treeKind : effectiveTreeKind;
         const tree = findChoppableTree(api, chopTreeKind, anchor, anchorMaxDist);
         if (tree) {

@@ -63,6 +63,30 @@ describe('walkPlanner', () => {
         expect(nearestNode(index, 3087, 3238, 50)).toBe('bank_draynor');
     });
 
+    test('nearestNode filters plane-specific nodes while preserving 2D nodes', () => {
+        const index = buildWalkGraphIndex(WALK_GRAPH);
+        expect(nearestNode(index, 2446, 3426, 10, 0)).not.toBe('bank_gnome_stronghold');
+        expect(nearestNode(index, 2446, 3426, 10, 1)).toBe('bank_gnome_stronghold');
+        expect(nearestNode(index, 2727, 3493, 10, 1)).toBe('bank_seers');
+    });
+
+    test('transition edges are explicit and not auto-reversed', () => {
+        const index = buildWalkGraphIndex(WALK_GRAPH);
+        const toBank = planRoute(index, 'wc_gnome_magic_central', 'bank_gnome_stronghold');
+        const fromBank = planRoute(index, 'bank_gnome_stronghold', 'wc_gnome_magic_central');
+        expect(toBank).not.toBeNull();
+        expect(fromBank).not.toBeNull();
+        expect(toBank!.edges.some(edge => edge.transition?.op === 'Climb-up')).toBe(true);
+        expect(fromBank!.edges.some(edge => edge.transition?.op === 'Climb-down')).toBe(true);
+    });
+
+    test('new magic tree nodes route to their banks', () => {
+        const index = buildWalkGraphIndex(WALK_GRAPH);
+        expect(planRoute(index, 'wc_seers_magic_north', 'bank_seers')).not.toBeNull();
+        expect(planRoute(index, 'wc_gnome_magic_west', 'bank_gnome_stronghold')).not.toBeNull();
+        expect(planRoute(index, 'wc_gnome_magic_east', 'bank_gnome_stronghold')).not.toBeNull();
+    });
+
     test('legacy world paths are preserved in graph', () => {
         expect(LEGACY_WORLD_PATHS.DRAYNOR_TO_LUMBRIDGE.length).toBeGreaterThan(5);
     });

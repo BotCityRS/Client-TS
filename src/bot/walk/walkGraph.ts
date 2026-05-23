@@ -1,6 +1,9 @@
 import { centroidEnginePair } from './coordDecode.js';
 import type { Path, WalkEdge, WalkGraphData, WalkNode } from './walkTypes.js';
 
+const GRAND_TREE_CLIMB_UP_LOC_IDS = [2447];
+const GRAND_TREE_CLIMB_DOWN_LOC_IDS = [2448];
+
 /** Migrated from former World.paths for backward compatibility. */
 export const LEGACY_WORLD_PATHS: Record<string, Path> = {
     DRAYNOR_TO_LUMBRIDGE: [[3092, 3248], [3103, 3236], [3109, 3226], [3126, 3222], [3136, 3225], [3148, 3229], [3160, 3232], [3173, 3236], [3186, 3240], [3191, 3238], [3206, 3242], [3218, 3238], [3229, 3228], [3233, 3219]],
@@ -42,6 +45,7 @@ const WALK_NODES: WalkNode[] = [
     { id: 'bank_al_kharid', label: 'Al Kharid bank', world: centroidEnginePair('0_51_49_1_25', '0_51_49_8_37'), kind: 'bank' },
     { id: 'bank_catherby', label: 'Catherby bank', world: centroidEnginePair('0_43_53_54_46', '0_43_53_60_53'), kind: 'bank' },
     { id: 'bank_seers', label: 'Seers bank', world: centroidEnginePair('0_42_54_33_34', '1_42_54_42_41'), kind: 'bank' },
+    { id: 'bank_gnome_stronghold', label: 'Gnome Stronghold bank', world: centroidEnginePair('1_38_53_12_32', '1_38_53_15_35'), kind: 'bank', plane: 1 },
     { id: 'hub_lumbridge', label: 'Lumbridge', world: [3239, 3233], kind: 'hub' },
     { id: 'hub_draynor', label: 'Draynor Village', world: [3120, 3267], kind: 'hub' },
     { id: 'hub_falador', label: 'Falador', world: [2989, 3355], kind: 'hub' },
@@ -54,9 +58,20 @@ const WALK_NODES: WalkNode[] = [
     { id: 'wc_draynor_willow', label: 'Draynor willow', world: [3084, 3230], kind: 'activity' },
     { id: 'wc_varrock_east_tree', label: 'Varrock east tree', world: [3289, 3428], kind: 'activity' },
     { id: 'wc_varrock_east_oak', label: 'Varrock east oak', world: [3275, 3426], kind: 'activity' },
+    { id: 'wc_varrock_north_yew', label: 'Varrock north yew', world: [3205, 3502], kind: 'activity' },
+    { id: 'wc_falador_south_yew', label: 'Falador south yew', world: [2997, 3312], kind: 'activity' },
+    { id: 'wc_catherby_oak', label: 'Catherby oak', world: [2788, 3440], kind: 'activity' },
+    { id: 'wc_catherby_willow', label: 'Catherby willow', world: [2783, 3428], kind: 'activity' },
+    { id: 'wc_catherby_yew', label: 'Catherby yew', world: [2760, 3434], kind: 'activity' },
     { id: 'wc_seers_maple', label: 'Seers maple', world: [2720, 3475], kind: 'activity' },
+    { id: 'wc_seers_willow', label: 'Seers willow', world: [2710, 3504], kind: 'activity' },
+    { id: 'wc_seers_yew', label: 'Seers yew', world: [2707, 3465], kind: 'activity' },
     { id: 'wc_edgeville_yew', label: 'Edgeville yew', world: [3221, 3504], kind: 'activity' },
     { id: 'wc_seers_magic', label: 'Seers magic', world: [2705, 3396], kind: 'activity' },
+    { id: 'wc_seers_magic_north', label: 'Seers magic north', world: [2692, 3425], kind: 'activity' },
+    { id: 'wc_gnome_magic_west', label: 'Gnome Stronghold magic west', world: [2371, 3426], kind: 'activity', plane: 0 },
+    { id: 'wc_gnome_magic_central', label: 'Gnome Stronghold magic central', world: [2432, 3410], kind: 'activity', plane: 0 },
+    { id: 'wc_gnome_magic_east', label: 'Gnome Stronghold magic east', world: [2490, 3414], kind: 'activity', plane: 0 },
     { id: 'fish_draynor_net', label: 'Draynor net fishing', world: [3087, 3230], kind: 'activity' },
     { id: 'fish_draynor_bait', label: 'Draynor bait fishing', world: [3087, 3230], kind: 'activity' },
     { id: 'fish_barbarian_fly', label: 'Barbarian fly fishing', world: [3105, 3432], kind: 'activity' },
@@ -84,6 +99,7 @@ const WALK_EDGES: WalkEdge[] = [
     { from: 'bank_draynor', to: 'hub_draynor', path: [[3087, 3238], [3105, 3255], [3120, 3267]] },
     { from: 'bank_lumbridge', to: 'hub_lumbridge', path: [[3208, 3220], [3225, 3225], [3239, 3233]] },
     { from: 'bank_varrock_east', to: 'hub_varrock', path: [[3253, 3426], [3235, 3435], [3211, 3450]] },
+    { from: 'bank_varrock_west', to: 'hub_varrock', path: [[3185, 3440], [3200, 3444], [3211, 3450]] },
     { from: 'bank_falador_east', to: 'hub_falador', path: [[3011, 3341], [3000, 3350], [2989, 3355]] },
     { from: 'hub_port_sarim', to: 'bank_draynor', path: [[3047, 3221], [3065, 3230], [3087, 3238]] },
     { from: 'wc_draynor_tree', to: 'bank_draynor', path: [[3088, 3235], [3087, 3238]] },
@@ -91,10 +107,60 @@ const WALK_EDGES: WalkEdge[] = [
     { from: 'wc_draynor_willow', to: 'bank_draynor', path: [[3084, 3230], [3087, 3238]] },
     { from: 'wc_varrock_east_tree', to: 'bank_varrock_east', path: [[3289, 3428], [3275, 3425], [3255, 3420]] },
     { from: 'wc_varrock_east_oak', to: 'bank_varrock_east', path: [[3275, 3426], [3262, 3423], [3255, 3420]] },
+    { from: 'wc_varrock_north_yew', to: 'bank_varrock_west', path: [[3205, 3502], [3200, 3484], [3194, 3462], [3185, 3448], [3185, 3440]] },
+    { from: 'wc_falador_south_yew', to: 'bank_falador_east', path: [[2997, 3312], [3005, 3330], [3011, 3341]] },
+    { from: 'wc_catherby_oak', to: 'bank_catherby', path: [[2788, 3440], [2809, 3440]] },
+    { from: 'wc_catherby_willow', to: 'bank_catherby', path: [[2783, 3428], [2795, 3435], [2809, 3440]] },
+    { from: 'wc_catherby_yew', to: 'bank_catherby', path: [[2760, 3434], [2784, 3437], [2809, 3440]] },
     { from: 'wc_seers_maple', to: 'bank_seers', path: [[2720, 3475], [2727, 3493]] },
+    { from: 'wc_seers_willow', to: 'bank_seers', path: [[2710, 3504], [2727, 3493]] },
+    { from: 'wc_seers_yew', to: 'bank_seers', path: [[2707, 3465], [2718, 3478], [2727, 3493]] },
     { from: 'wc_edgeville_yew', to: 'bank_edgeville', path: [[3221, 3504], [3093, 3490]] },
     { from: 'wc_seers_magic', to: 'bank_seers', path: [[2705, 3396], [2727, 3493]] },
+    { from: 'wc_seers_magic_north', to: 'bank_seers', path: [[2692, 3425], [2704, 3454], [2727, 3493]] },
     { from: 'bank_seers', to: 'bank_catherby', path: [[2727, 3493], [2750, 3450], [2811, 3441]] },
+    {
+        from: 'wc_gnome_magic_west',
+        to: 'bank_gnome_stronghold',
+        path: [[2371, 3426], [2405, 3425], [2432, 3422], [2460, 3440], [2484, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_UP_LOC_IDS, op: 'Climb-up', target: [2444, 3424], targetPlane: 1 },
+        bidirectional: false
+    },
+    {
+        from: 'wc_gnome_magic_central',
+        to: 'bank_gnome_stronghold',
+        path: [[2432, 3410], [2440, 3420], [2460, 3440], [2484, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_UP_LOC_IDS, op: 'Climb-up', target: [2444, 3424], targetPlane: 1 },
+        bidirectional: false
+    },
+    {
+        from: 'wc_gnome_magic_east',
+        to: 'bank_gnome_stronghold',
+        path: [[2490, 3414], [2480, 3425], [2460, 3440], [2484, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_UP_LOC_IDS, op: 'Climb-up', target: [2444, 3424], targetPlane: 1 },
+        bidirectional: false
+    },
+    {
+        from: 'bank_gnome_stronghold',
+        to: 'wc_gnome_magic_west',
+        path: [[2444, 3424], [2485, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_DOWN_LOC_IDS, op: 'Climb-down', target: [2371, 3426], targetPlane: 0 },
+        bidirectional: false
+    },
+    {
+        from: 'bank_gnome_stronghold',
+        to: 'wc_gnome_magic_central',
+        path: [[2444, 3424], [2485, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_DOWN_LOC_IDS, op: 'Climb-down', target: [2432, 3410], targetPlane: 0 },
+        bidirectional: false
+    },
+    {
+        from: 'bank_gnome_stronghold',
+        to: 'wc_gnome_magic_east',
+        path: [[2444, 3424], [2485, 3464]],
+        transition: { type: 'loc', locIds: GRAND_TREE_CLIMB_DOWN_LOC_IDS, op: 'Climb-down', target: [2490, 3414], targetPlane: 0 },
+        bidirectional: false
+    },
     { from: 'fish_draynor_net', to: 'bank_draynor', path: [[3087, 3230], [3087, 3238]] },
     { from: 'fish_draynor_bait', to: 'bank_draynor', path: [[3087, 3230], [3087, 3238]] },
     { from: 'fish_barbarian_fly', to: 'bank_edgeville', path: LEGACY_WORLD_PATHS.BARB_VILLAGE_TO_EDGEVILLE },
