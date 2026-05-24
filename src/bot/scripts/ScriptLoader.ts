@@ -88,7 +88,7 @@ export default class ScriptLoader extends BotScript {
     scriptEnd: string;
 
     constructor(scriptStart: string, scriptUpdate: string, scriptEnd: string) {
-        super('ScriptLoader', true, true);
+        super('ScriptLoader', true, { author: 'LostCityRS', version: '1.0.0', isDebugScript: true });
 
         this.scriptStart = scriptStart;
         this.scriptUpdate = scriptUpdate;
@@ -269,7 +269,7 @@ export default class ScriptLoader extends BotScript {
             return new Function('BotScript', 'startCode', 'updateCode', 'stopCode', 'htmlSetupCode', 'buildFromHtmlCode', `
             return class ${classIdentifier} extends BotScript {
                 constructor() {
-                    super(${safeName}, false);
+                    super(${safeName}, false, { author: 'local', version: '1.0.0' });
                     this.start = new Function('bot', startCode);
                     this.update = new Function('bot', updateCode);
                     this.stop = new Function('bot', stopCode);

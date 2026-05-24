@@ -236,6 +236,10 @@ export default class Bot {
         return true;
     }
 
+    private formatScriptMetadata(script: BotScript): string {
+        return `Author: ${script.author} | Version: ${script.version}`;
+    }
+
     private setAccountStatus(message: string) {
         const el = document.getElementById('botAccountStatus');
         if (el) {
@@ -427,6 +431,7 @@ export default class Bot {
 
         for (let i: number = 0; i < this.scripts.length; ++i) {
             if (scriptRegistryKey(this.scripts[i]) === target) {
+                const instance = this.createScriptInstance(this.scripts[i]);
                 this.scripts[i].htmlSetup(botParams);
                 this._injStartScript = () => {
                     const C = this.scripts[i] as unknown as { buildFromHtml(el: HTMLElement): BotScript };
@@ -438,9 +443,9 @@ export default class Bot {
                 const del = document.getElementById('deleteBot');
                 if (del) {
                     const key = scriptRegistryKey(this.scripts[i]);
-                    del.hidden = this.createScriptInstance(this.scripts[i]).isSystemScript || !this.localScriptNamesByRegistryKey.has(key);
+                    del.hidden = instance.isSystemScript || !this.localScriptNamesByRegistryKey.has(key);
                 }
-                this.setSummary(`Configure ${target} and click Start Bot.`);
+                this.setSummary(`${this.formatScriptMetadata(instance)}. Configure ${target} and click Start Bot.`);
                 break;
             }
         }
