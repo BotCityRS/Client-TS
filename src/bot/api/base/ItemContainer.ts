@@ -3,19 +3,27 @@ import ObjType from "#/config/ObjType.js";
 import type BotAPI from "../BotAPI";
 import InterfaceItem from "./InterfaceItem";
 
+type InterfaceItemConstructor<T extends InterfaceItem> = new (
+    api: BotAPI,
+    interfaceId: number,
+    slot: number,
+    id: number,
+    count: number
+) => T;
+
 export default class ItemContainer<T extends InterfaceItem> {
     api: BotAPI;
     interfaceId: number;
-    InterfaceItemType: new (...args: unknown[]) => T;
+    InterfaceItemType: InterfaceItemConstructor<T>;
 
-    constructor(api: BotAPI, interfaceId: number, InterfaceItemType: new (...args: unknown[]) => T) {
+    constructor(api: BotAPI, interfaceId: number, InterfaceItemType: InterfaceItemConstructor<T>) {
         this.api = api;
         this.interfaceId = interfaceId;
         this.InterfaceItemType = InterfaceItemType;
     }
 
-    private createItem(...args: ConstructorParameters<typeof this.InterfaceItemType>): T {
-        return new this.InterfaceItemType(...args);
+    private createItem(slot: number, id: number, count: number): T {
+        return new this.InterfaceItemType(this.api, this.interfaceId, slot, id, count);
     }
 
     getContainerSize() {
@@ -42,7 +50,7 @@ export default class ItemContainer<T extends InterfaceItem> {
         const slotCount = counts[slotId] ?? 0;
         if (slotItem > 0) {
             const realSlotItem = ObjType.list(slotItem - 1);
-            return this.createItem(this.api, this.interfaceId, slotId, realSlotItem.id, slotCount);
+            return this.createItem(slotId, realSlotItem.id, slotCount);
         }
         return null;
     }

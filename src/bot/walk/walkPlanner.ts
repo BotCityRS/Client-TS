@@ -55,7 +55,7 @@ export function buildWalkGraphIndex(data: WalkGraphData): WalkGraphIndex {
 
     for (const edge of data.edges) {
         addEdge(edge);
-        if (edge.bidirectional !== false) {
+        if (edge.bidirectional !== false && !edge.transition) {
             addEdge({
                 from: edge.to,
                 to: edge.from,
@@ -72,15 +72,23 @@ export function worldDistanceToNode(worldX: number, worldZ: number, node: WalkNo
     return Utility.getDistance(worldX, worldZ, node.world[0], node.world[1]);
 }
 
+export function nodeMatchesPlane(node: WalkNode, plane?: number): boolean {
+    return plane === undefined || node.plane === undefined || node.plane === plane;
+}
+
 export function nearestNode(
     index: WalkGraphIndex,
     worldX: number,
     worldZ: number,
-    maxDist = Number.POSITIVE_INFINITY
+    maxDist = Number.POSITIVE_INFINITY,
+    plane?: number
 ): WalkNodeId | null {
     let best: WalkNodeId | null = null;
     let bestDist = maxDist;
     for (const node of index.nodes.values()) {
+        if (!nodeMatchesPlane(node, plane)) {
+            continue;
+        }
         const d = worldDistanceToNode(worldX, worldZ, node);
         if (d < bestDist) {
             bestDist = d;

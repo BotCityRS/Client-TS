@@ -3,6 +3,15 @@ export type Path = PathNode[];
 
 export type WalkNodeKind = 'bank' | 'hub' | 'activity';
 
+export type WalkTransition = {
+    type: 'loc';
+    locIds: number[];
+    op: string;
+    target: PathNode;
+    targetPlane?: number;
+    timeoutMs?: number;
+};
+
 export type WalkNodeId =
     | 'bank_lumbridge'
     | 'bank_draynor'
@@ -14,6 +23,7 @@ export type WalkNodeId =
     | 'bank_al_kharid'
     | 'bank_catherby'
     | 'bank_seers'
+    | 'bank_gnome_stronghold'
     | 'hub_lumbridge'
     | 'hub_draynor'
     | 'hub_falador'
@@ -26,9 +36,20 @@ export type WalkNodeId =
     | 'wc_draynor_willow'
     | 'wc_varrock_east_tree'
     | 'wc_varrock_east_oak'
+    | 'wc_varrock_north_yew'
+    | 'wc_falador_south_yew'
+    | 'wc_catherby_oak'
+    | 'wc_catherby_willow'
+    | 'wc_catherby_yew'
     | 'wc_seers_maple'
+    | 'wc_seers_willow'
+    | 'wc_seers_yew'
     | 'wc_edgeville_yew'
     | 'wc_seers_magic'
+    | 'wc_seers_magic_north'
+    | 'wc_gnome_magic_west'
+    | 'wc_gnome_magic_central'
+    | 'wc_gnome_magic_east'
     | 'fish_draynor_net'
     | 'fish_draynor_bait'
     | 'fish_barbarian_fly'
@@ -50,6 +71,7 @@ export type WalkEdge = {
     from: WalkNodeId;
     to: WalkNodeId;
     path: Path;
+    transition?: WalkTransition;
     /** When true (default), a reverse edge is registered at graph load. */
     bidirectional?: boolean;
 };

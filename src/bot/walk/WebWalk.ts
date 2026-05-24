@@ -1,11 +1,13 @@
 import type BotAPI from '../api/BotAPI.js';
 import Utility from '../api/Utility.js';
-import type { Path, PathNode } from './walkTypes.js';
+import type { Path, PathNode, WalkTransition } from './walkTypes.js';
 import { WALK_GRAPH } from './walkGraph.js';
 import {
     buildWalkGraphIndex,
     nearestNode,
+    nodeMatchesPlane,
     planRoute,
+    type PlannedRoute,
     type WalkGraphIndex,
     worldDistanceToNode
 } from './walkPlanner.js';
@@ -15,6 +17,8 @@ const ARRIVAL_TILES = 5;
 const NEAREST_NODE_MAX_TILES = 25;
 const LAST_MILE_ATTEMPTS = 8;
 const LAST_MILE_MS = 550;
+const TRANSITION_POLL_MS = 250;
+const DEFAULT_TRANSITION_TIMEOUT_MS = 5000;
 
 export default class WebWalk {
     private readonly index: WalkGraphIndex;
@@ -41,23 +45,31 @@ export default class WebWalk {
     }
 
     nearestNode(worldX: number, worldZ: number, maxDist = NEAREST_NODE_MAX_TILES): WalkNodeId | null {
-        return nearestNode(this.index, worldX, worldZ, maxDist);
+        return nearestNode(this.index, worldX, worldZ, maxDist, this.api.surface.currentLevel);
     }
 
     planRoute(from: WalkNodeId, to: WalkNodeId): Path | null {
         return planRoute(this.index, from, to)?.path ?? null;
     }
 
+    private planFullRoute(from: WalkNodeId, to: WalkNodeId): PlannedRoute | null {
+        return planRoute(this.index, from, to);
+    }
+
     planRouteFromPlayer(to: WalkNodeId): Path | null {
+        return this.planFullRouteFromPlayer(to)?.path ?? null;
+    }
+
+    private planFullRouteFromPlayer(to: WalkNodeId): PlannedRoute | null {
         const pos = this.getPlayerWorldPos();
         if (!pos) {
             return null;
         }
-        const from = nearestNode(this.index, pos[0], pos[1], Number.POSITIVE_INFINITY);
+        const from = nearestNode(this.index, pos[0], pos[1], Number.POSITIVE_INFINITY, this.api.surface.currentLevel);
         if (!from) {
             return null;
         }
-        return this.planRoute(from, to);
+        return this.planFullRoute(from, to);
     }
 
     private worldDistanceTo(worldX: number, worldZ: number): number {
@@ -79,6 +91,62 @@ export default class WebWalk {
         return this.worldDistanceTo(worldX, worldZ) <= ARRIVAL_TILES;
     }
 
+    private isAtNode(nodeId: WalkNodeId): boolean {
+        const node = this.index.nodes.get(nodeId);
+        if (!node) {
+            return false;
+        }
+        return nodeMatchesPlane(node, this.api.surface.currentLevel) && this.worldDistanceTo(node.world[0], node.world[1]) <= ARRIVAL_TILES;
+    }
+
+    private isAtTransitionTarget(transition: WalkTransition): boolean {
+        if (transition.targetPlane !== undefined && this.api.surface.currentLevel !== transition.targetPlane) {
+            return false;
+        }
+        return this.worldDistanceTo(transition.target[0], transition.target[1]) <= ARRIVAL_TILES;
+    }
+
+    private async waitForTransitionTarget(transition: WalkTransition): Promise<boolean> {
+        const timeoutMs = transition.timeoutMs ?? DEFAULT_TRANSITION_TIMEOUT_MS;
+        const startedAt = Date.now();
+        while (Date.now() - startedAt <= timeoutMs) {
+            if (this.isAtTransitionTarget(transition)) {
+                return true;
+            }
+            await new Promise<void>(resolve => setTimeout(resolve, TRANSITION_POLL_MS));
+        }
+        return this.isAtTransitionTarget(transition);
+    }
+
+    private async runTransition(transition: WalkTransition, nodeId: WalkNodeId): Promise<boolean> {
+        if (this.isAtTransitionTarget(transition)) {
+            return true;
+        }
+
+        const loc = this.api.worldObject.getNearestByIdPath(transition.locIds, 30)
+            ?? this.api.worldObject.getNearestById(transition.locIds, 30);
+        if (!loc) {
+            this.api.bot.log('WARN', 'WebWalk.runTransition', 'transition loc not found', {
+                nodeId,
+                locIds: transition.locIds,
+                op: transition.op
+            });
+            return false;
+        }
+
+        this.api.bot.log('INFO', 'WebWalk.runTransition', 'interact transition loc', {
+            nodeId,
+            locId: loc.id,
+            op: transition.op,
+            target: transition.target,
+            targetPlane: transition.targetPlane
+        });
+        if (!loc.interactByOpEquals(transition.op) && !loc.interactByOpIncludes(transition.op)) {
+            return false;
+        }
+        return await this.waitForTransitionTarget(transition);
+    }
+
     isWalking(): boolean {
         return this.walking || this.api.world.hasPath();
     }
@@ -96,12 +164,12 @@ export default class WebWalk {
         }
 
         const [tx, tz] = node.world;
-        if (this.worldDistanceTo(tx, tz) <= ARRIVAL_TILES) {
+        if (this.isAtNode(nodeId)) {
             return true;
         }
 
-        const path = this.planRouteFromPlayer(nodeId);
-        if (!path || path.length === 0) {
+        const route = this.planFullRouteFromPlayer(nodeId);
+        if (!route || route.path.length === 0) {
             this.api.bot.log('WARN', 'WebWalk.walkToNode', 'no route', { nodeId });
             return false;
         }
@@ -111,11 +179,40 @@ export default class WebWalk {
         }
 
         this.walking = true;
-        this.api.bot.log('INFO', 'WebWalk.walkToNode', 'start', { nodeId, nodes: path.length });
+        this.api.bot.log('INFO', 'WebWalk.walkToNode', 'start', {
+            nodeId,
+            nodes: route.path.length,
+            edges: route.edges.length,
+            plane: this.api.surface.currentLevel
+        });
         try {
-            const ok = await this.api.world.walkPath(path);
-            if (!ok) {
-                this.api.bot.log('WARN', 'WebWalk.walkToNode', 'walkPath failed', { nodeId });
+            for (const edge of route.edges) {
+                if (edge.path.length > 0) {
+                    const ok = await this.api.world.walkPath(edge.path);
+                    if (!ok) {
+                        this.api.bot.log('WARN', 'WebWalk.walkToNode', 'walkPath failed', {
+                            nodeId,
+                            from: edge.from,
+                            to: edge.to
+                        });
+                        return false;
+                    }
+                }
+                if (edge.transition && !await this.runTransition(edge.transition, nodeId)) {
+                    this.api.bot.log('WARN', 'WebWalk.walkToNode', 'transition failed', {
+                        nodeId,
+                        from: edge.from,
+                        to: edge.to
+                    });
+                    return false;
+                }
+            }
+            if (node.plane !== undefined && this.api.surface.currentLevel !== node.plane) {
+                this.api.bot.log('WARN', 'WebWalk.walkToNode', 'arrived on wrong plane', {
+                    nodeId,
+                    expectedPlane: node.plane,
+                    actualPlane: this.api.surface.currentLevel
+                });
                 return false;
             }
             return await this.lastMileTo(tx, tz);
@@ -134,8 +231,8 @@ export default class WebWalk {
             return true;
         }
 
-        const targetNodeId = nearestNode(this.index, x, z, maxLast)
-            ?? nearestNode(this.index, x, z, Number.POSITIVE_INFINITY);
+        const targetNodeId = nearestNode(this.index, x, z, maxLast, this.api.surface.currentLevel)
+            ?? nearestNode(this.index, x, z, Number.POSITIVE_INFINITY, this.api.surface.currentLevel);
 
         if (targetNodeId) {
             const node = this.index.nodes.get(targetNodeId)!;
@@ -179,6 +276,9 @@ export default class WebWalk {
         const node = this.index.nodes.get(nodeId);
         const pos = this.getPlayerWorldPos();
         if (!node || !pos) {
+            return Number.POSITIVE_INFINITY;
+        }
+        if (!nodeMatchesPlane(node, this.api.surface.currentLevel)) {
             return Number.POSITIVE_INFINITY;
         }
         return worldDistanceToNode(pos[0], pos[1], node);
