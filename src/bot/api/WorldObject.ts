@@ -3,6 +3,26 @@ import LocType from '#/config/LocType.js';
 import type World from '#/dash3d/World.js';
 import WorldObjectEntity from './base/WorldObjectEntity.js';
 import type BotAPI from "./BotAPI";
+import Utility from './Utility';
+
+export type WorldObjectNameMatcher = string | RegExp;
+
+export type WorldObjectSearchArea = {
+    x1: number;
+    z1: number;
+    x2: number;
+    z2: number;
+};
+
+export type WorldObjectSearchOptions = {
+    maxDistance?: number;
+    area?: WorldObjectSearchArea;
+    reachable?: boolean;
+    maxSteps?: number;
+    plane?: number;
+    op?: string;
+    exactOp?: boolean;
+};
 
 function pushLocTypecode(api: BotAPI, typecode: number, seen: Set<number>, out: WorldObjectEntity[]): void {
     if (!typecode || seen.has(typecode)) {
@@ -25,7 +45,7 @@ export default class WorldObject {
         this.api = api;
     }
 
-    getAll() {
+    getAll(): WorldObjectEntity[] {
         if (!this.api.isLoggedIn()) {
             return [];
         }
@@ -48,19 +68,108 @@ export default class WorldObject {
         return out;
     }
 
-    getById(ids: number[]) {
-        return this.getAll().filter(wo => ids.includes(wo.id));
+    private nameMatches(name: string | null, matcher: WorldObjectNameMatcher): boolean {
+        if (!name) {
+            return false;
+        }
+        if (matcher instanceof RegExp) {
+            return matcher.test(name);
+        }
+        return name.toLowerCase() === matcher.toLowerCase();
     }
 
-    getNearestById(ids: number[], maxDistance: number = 200) {
-        const worldObjects = this.getById(ids);
-        let closest: (typeof worldObjects)[0] | null = null;
-        worldObjects.forEach(wo => {
-            if (wo.playerDist <= maxDistance && (!closest || wo.playerDist < closest.playerDist)) {
+    private opMatches(wo: WorldObjectEntity, op: string, exact: boolean): boolean {
+        const want = op.toLowerCase();
+        return wo.ops.some(label => {
+            const lower = label?.toLowerCase();
+            return exact ? lower === want : lower?.includes(want) === true;
+        });
+    }
+
+    private matchesOptions(wo: WorldObjectEntity, opts?: WorldObjectSearchOptions): boolean {
+        if (opts?.maxDistance !== undefined && wo.distance() > opts.maxDistance) {
+            return false;
+        }
+        const worldPos = wo.getWorldPosition();
+        if (opts?.plane !== undefined && worldPos.plane !== opts.plane) {
+            return false;
+        }
+        if (opts?.area) {
+            const { x1, z1, x2, z2 } = opts.area;
+            if (worldPos.x < x1 || worldPos.x > x2 || worldPos.z < z1 || worldPos.z > z2) {
+                return false;
+            }
+        }
+        if (opts?.op && !this.opMatches(wo, opts.op, opts.exactOp ?? true)) {
+            return false;
+        }
+        if (opts?.reachable && !wo.isReachable(opts.maxSteps ?? Number.POSITIVE_INFINITY)) {
+            return false;
+        }
+        return true;
+    }
+
+    private nearest(objects: WorldObjectEntity[]): WorldObjectEntity | null {
+        let closest: WorldObjectEntity | null = null;
+        for (const wo of objects) {
+            if (!closest || wo.distance() < closest.distance()) {
                 closest = wo;
             }
-        });
+        }
         return closest;
+    }
+
+    getById(ids: number[], opts?: WorldObjectSearchOptions): WorldObjectEntity[] {
+        return this.getAll().filter(wo => ids.includes(wo.id) && this.matchesOptions(wo, opts));
+    }
+
+    getByName(name: WorldObjectNameMatcher, opts?: WorldObjectSearchOptions): WorldObjectEntity[] {
+        return this.getAll().filter(wo => this.nameMatches(wo.name, name) && this.matchesOptions(wo, opts));
+    }
+
+    getNearestByName(name: WorldObjectNameMatcher, opts?: WorldObjectSearchOptions): WorldObjectEntity | null {
+        return this.nearest(this.getByName(name, opts));
+    }
+
+    getByOp(op: string, opts?: WorldObjectSearchOptions & { exact?: boolean }): WorldObjectEntity[] {
+        return this.getAll().filter(wo => this.opMatches(wo, op, opts?.exact ?? true) && this.matchesOptions(wo, opts));
+    }
+
+    getNearestByOp(op: string, opts?: WorldObjectSearchOptions & { exact?: boolean }): WorldObjectEntity | null {
+        return this.nearest(this.getByOp(op, opts));
+    }
+
+    getNearest(predicate: (wo: WorldObjectEntity) => boolean, opts?: WorldObjectSearchOptions): WorldObjectEntity | null {
+        return this.nearest(this.getAll().filter(wo => predicate(wo) && this.matchesOptions(wo, opts)));
+    }
+
+    getAt(worldX: number, worldZ: number, ids?: number[]): WorldObjectEntity[] {
+        const wanted = ids ? new Set(ids) : null;
+        return this.getAll().filter(wo => {
+            const pos = wo.getWorldPosition();
+            return pos.x === worldX && pos.z === worldZ && (!wanted || wanted.has(wo.id));
+        });
+    }
+
+    getNear(worldX: number, worldZ: number, radius: number, ids?: number[]): WorldObjectEntity[] {
+        const wanted = ids ? new Set(ids) : null;
+        return this.getAll()
+            .filter(wo => {
+                if (wanted && !wanted.has(wo.id)) {
+                    return false;
+                }
+                const pos = wo.getWorldPosition();
+                return Utility.getDistance(pos.x, pos.z, worldX, worldZ) <= radius;
+            })
+            .sort((a, b) => {
+                const pa = a.getWorldPosition();
+                const pb = b.getWorldPosition();
+                return Utility.getDistance(pa.x, pa.z, worldX, worldZ) - Utility.getDistance(pb.x, pb.z, worldX, worldZ);
+            });
+    }
+
+    getNearestById(ids: number[], maxDistance: number = 200): WorldObjectEntity | null {
+        return this.nearest(this.getById(ids).filter(wo => wo.distance() <= maxDistance));
     }
 
     /** Shortest walkable steps from the player to interact with this loc; -1 if unreachable. */

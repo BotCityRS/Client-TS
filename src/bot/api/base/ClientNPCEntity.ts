@@ -4,6 +4,37 @@ import type { BotLogFn } from '#/bot/BotLog.js';
 import type BotAPI from '../BotAPI';
 import { assertApi } from '../botApiAssert.js';
 import Utility from '../Utility';
+import type InvInterfaceItem from './InvInterfaceItem';
+
+export type NPCTilePosition = {
+    x: number;
+    z: number;
+    plane: number;
+};
+
+export type NPCAnimationState = {
+    id: number;
+    frame: number;
+    delay: number;
+    loop: number;
+};
+
+export type NPCTarget =
+    | { kind: 'npc'; slot: number; raw: number }
+    | { kind: 'player'; slot: number; raw: number };
+
+export type NPCHealthBar = {
+    current: number;
+    total: number;
+    percent: number;
+};
+
+export type NPCHitmark = {
+    slot: number;
+    value: number;
+    type: number;
+    cycle: number;
+};
 
 /** Same slot → opcode mapping as `Client.addNpcOptions` for non-attack NPC ops (`op[0]` → OP_NPC1, …). */
 export const BOT_NPC_OP_SLOT_TO_MENU: readonly number[] = [
@@ -72,25 +103,184 @@ export default class ClientNPCEntity {
         return { rx: this.npc.routeX[0], rz: this.npc.routeZ[0] };
     }
 
-    attack() {
-        const logFn = this.botLog();
+    get type() {
+        return this.npc.type;
+    }
+
+    get name(): string | null {
+        return this.type?.name ?? null;
+    }
+
+    get description(): string | null {
+        return this.type?.desc ?? null;
+    }
+
+    get combatLevel(): number {
+        return this.type?.vislevel ?? -1;
+    }
+
+    get size(): number {
+        return this.type?.size ?? this.npc.size ?? 1;
+    }
+
+    get ops(): readonly (string | null)[] {
+        return this.type?.op ?? [];
+    }
+
+    get localX(): number {
+        return this.npc.routeX[0] ?? -1;
+    }
+
+    get localZ(): number {
+        return this.npc.routeZ[0] ?? -1;
+    }
+
+    getLocalPosition(): NPCTilePosition {
+        return {
+            x: this.localX,
+            z: this.localZ,
+            plane: this.api.surface.currentLevel
+        };
+    }
+
+    getWorldPosition(): NPCTilePosition {
+        const local = this.getLocalPosition();
+        return {
+            x: local.x >= 0 ? local.x + this.api.surface.sceneBaseTileX : -1,
+            z: local.z >= 0 ? local.z + this.api.surface.sceneBaseTileZ : -1,
+            plane: local.plane
+        };
+    }
+
+    getAnimation(): NPCAnimationState {
+        return {
+            id: this.npc.primaryAnim ?? -1,
+            frame: this.npc.primaryAnimFrame ?? -1,
+            delay: this.npc.primaryAnimDelay ?? -1,
+            loop: this.npc.primaryAnimLoop ?? -1
+        };
+    }
+
+    getTarget(): NPCTarget | null {
+        const raw = this.npc.faceEntity ?? -1;
+        if (raw < 0) {
+            return null;
+        }
+        if (raw < 32768) {
+            return { kind: 'npc', slot: raw, raw };
+        }
+        return { kind: 'player', slot: raw - 32768, raw };
+    }
+
+    getHealthBar(): NPCHealthBar {
+        const current = this.npc.health ?? 0;
+        const total = this.npc.totalHealth ?? 0;
+        return {
+            current,
+            total,
+            percent: total > 0 ? Math.max(0, Math.min(100, (current / total) * 100)) : 0
+        };
+    }
+
+    getHitmarks(): NPCHitmark[] {
+        const hitmarks: NPCHitmark[] = [];
+        for (let slot = 0; slot < this.npc.damageValues.length && slot < this.npc.damageTypes.length && slot < this.npc.damageCycles.length; slot++) {
+            hitmarks.push({
+                slot,
+                value: this.npc.damageValues[slot],
+                type: this.npc.damageTypes[slot],
+                cycle: this.npc.damageCycles[slot]
+            });
+        }
+        return hitmarks;
+    }
+
+    isInCombat(): boolean {
+        return (this.npc.faceEntity ?? -1) !== -1;
+    }
+
+    isStale(): boolean {
+        return this.api.surface.npcs[this.uid] !== this.npc;
+    }
+
+    private isLiveReference(action: string): boolean {
         const live = this.api.surface.npcs[this.uid];
-        assertApi(live === this.npc, logFn, 'ClientNPCEntity.attack', 'NPC uid slot no longer matches entity reference', { uid: this.uid, id: this.id });
+        if (live === this.npc) {
+            return true;
+        }
+        assertApi(false, this.botLog(), action, 'NPC uid slot no longer matches entity reference', {
+            uid: this.uid,
+            id: this.id,
+            liveId: live?.type?.id ?? null
+        });
+        return false;
+    }
+
+    private opMatches(label: string | null | undefined, needle: string, mode: 'equals' | 'includes'): boolean {
+        if (!label) {
+            return false;
+        }
+        const op = label.toLowerCase();
+        const want = needle.toLowerCase();
+        return mode === 'equals' ? op === want : op.includes(want);
+    }
+
+    private interactByOp(needle: string, mode: 'equals' | 'includes', opts?: { includeAttack?: boolean }): boolean {
+        const logFn = this.botLog();
+        const t = this.npc.type?.op;
+        const source = mode === 'equals' ? 'ClientNPCEntity.interactByOpEquals' : 'ClientNPCEntity.interactByOpIncludes';
+        if (!t) {
+            assertApi(false, logFn, source, 'NPC has no type ops', { uid: this.uid, id: this.id, needle });
+            return false;
+        }
+        if (!this.isLiveReference(source)) {
+            return false;
+        }
+        for (let i = 4; i >= 0; i--) {
+            const o = t[i];
+            const isAttack = o?.toLowerCase() === 'attack';
+            if (isAttack && !opts?.includeAttack) {
+                continue;
+            }
+            if (this.opMatches(o, needle, mode)) {
+                const opcode = isAttack
+                    ? npcAttackMenuOpcode(this.npc, this.api.surface.localPlayer?.combatLevel)
+                    : BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
+                if (opcode == null) {
+                    assertApi(false, logFn, source, 'No Attack option opcode on NPC type', { uid: this.uid, id: this.id });
+                    return false;
+                }
+                const { rx, rz } = this.npcInteractParams();
+                this.api.bot.log('INFO', source, 'matched', { needle, opSlot: i, opcode, verb: o, uid: this.uid, id: this.id });
+                this.api.doAction(opcode, this.uid, rx, rz);
+                return true;
+            }
+        }
+        this.api.bot.log('WARN', source, 'no matching op', { needle, uid: this.uid, id: this.id, ops: [...t], includeAttack: opts?.includeAttack === true });
+        return false;
+    }
+
+    attack(): boolean {
+        const logFn = this.botLog();
+        if (!this.isLiveReference('ClientNPCEntity.attack')) {
+            return false;
+        }
         const lp = this.api.surface.localPlayer;
         const opcode = npcAttackMenuOpcode(this.npc, lp?.combatLevel);
         if (opcode == null) {
             assertApi(false, logFn, 'ClientNPCEntity.attack', 'No Attack option on NPC type', { uid: this.uid, id: this.id });
-            return;
+            return false;
         }
         const { rx, rz } = this.npcInteractParams();
         this.api.doAction(opcode, this.uid, rx, rz);
+        return true;
     }
 
     /**
      * Triggers the n-th **non-attack** NPC context option, in the same order as the real client menu
      * (iterates `op[4]` … `op[0]`, skipping null and Attack), using `MiniMenuAction.OP_NPC1` … `OP_NPC5`.
      */
-    interact(optionIndex: number) {
+    interact(optionIndex: number): boolean {
         const logFn = this.botLog();
         const slots = nonAttackNpcOpSlotsInMenuOrder(this.npc);
         assertApi(optionIndex >= 0, logFn, 'ClientNPCEntity.interact', 'optionIndex must be >= 0', { optionIndex, uid: this.uid, id: this.id });
@@ -101,7 +291,10 @@ export default class ClientNPCEntity {
             opLabels: slots.map(i => this.npc.type?.op?.[i] ?? '?')
         });
         if (optionIndex < 0 || optionIndex >= slots.length) {
-            return;
+            return false;
+        }
+        if (!this.isLiveReference('ClientNPCEntity.interact')) {
+            return false;
         }
         const slot = slots[optionIndex]!;
         const opcode = BOT_NPC_OP_SLOT_TO_MENU[slot] ?? MiniMenuAction.OP_NPC1;
@@ -115,6 +308,7 @@ export default class ClientNPCEntity {
             id: this.id
         });
         this.api.doAction(opcode, this.uid, rx, rz);
+        return true;
     }
 
     /**
@@ -122,64 +316,33 @@ export default class ClientNPCEntity {
      * Uses the config op slot directly (not context-menu order), so it stays correct when op1/op3
      * gaps reorder entries in the right-click list.
      */
-    interactByOpEquals(verb: string): boolean {
-        const logFn = this.botLog();
-        const t = this.npc.type?.op;
-        if (!t) {
-            assertApi(false, logFn, 'ClientNPCEntity.interactByOpEquals', 'NPC has no type ops', { uid: this.uid, id: this.id, verb });
-            return false;
-        }
-        const want = verb.toLowerCase();
-        for (let i = 4; i >= 0; i--) {
-            const o = t[i];
-            if (o === null || o === undefined || o.toLowerCase() === 'attack') {
-                continue;
-            }
-            if (o.toLowerCase() === want) {
-                const opcode = BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
-                const { rx, rz } = this.npcInteractParams();
-                this.api.bot.log('INFO', 'ClientNPCEntity.interactByOpEquals', 'matched', { verb, opSlot: i, opcode, uid: this.uid, id: this.id });
-                this.api.doAction(opcode, this.uid, rx, rz);
-                return true;
-            }
-        }
-        this.api.bot.log('WARN', 'ClientNPCEntity.interactByOpEquals', 'no matching op', { verb, uid: this.uid, id: this.id, ops: [...t] });
-        return false;
+    interactByOpEquals(verb: string, opts?: { includeAttack?: boolean }): boolean {
+        return this.interactByOp(verb, 'equals', opts);
     }
 
     /**
      * Invokes the first non-attack NPC op whose label contains `needle` (case-insensitive).
      * Typical use: `interactByOpIncludes('pickpocket')` or `'steal'`.
      */
-    interactByOpIncludes(needle: string): boolean {
-        const logFn = this.botLog();
-        const t = this.npc.type?.op;
-        if (!t) {
-            assertApi(false, logFn, 'ClientNPCEntity.interactByOpIncludes', 'NPC has no type ops', { uid: this.uid, id: this.id, needle });
-            return false;
-        }
-        const lower = needle.toLowerCase();
-        for (let i = 4; i >= 0; i--) {
-            const o = t[i];
-            if (o === null || o === undefined || o.toLowerCase() === 'attack') {
-                continue;
-            }
-            if (o.toLowerCase().includes(lower)) {
-                const opcode = BOT_NPC_OP_SLOT_TO_MENU[i] ?? MiniMenuAction.OP_NPC1;
-                const { rx, rz } = this.npcInteractParams();
-                this.api.bot.log('INFO', 'ClientNPCEntity.interactByOpIncludes', 'matched', { needle, opSlot: i, opcode, verb: o, uid: this.uid, id: this.id });
-                this.api.doAction(opcode, this.uid, rx, rz);
-                return true;
-            }
-        }
-        this.api.bot.log('WARN', 'ClientNPCEntity.interactByOpIncludes', 'no matching op', { needle, uid: this.uid, id: this.id, ops: [...t] });
-        return false;
+    interactByOpIncludes(needle: string, opts?: { includeAttack?: boolean }): boolean {
+        return this.interactByOp(needle, 'includes', opts);
     }
 
-    examine() {
+    examine(): boolean {
+        if (!this.isLiveReference('ClientNPCEntity.examine')) {
+            return false;
+        }
         this.api.bot.log('INFO', 'ClientNPCEntity.examine', 'examine', { uid: this.uid, id: this.id });
         const { rx, rz } = this.npcInteractParams();
         this.api.doAction(MiniMenuAction.OP_NPC6, this.uid, rx, rz);
+        return true;
+    }
+
+    useItem(item: InvInterfaceItem): boolean {
+        if (!this.isLiveReference('ClientNPCEntity.useItem')) {
+            return false;
+        }
+        return item.useOnNpc(this);
     }
 
     isInArea(x1: number, z1: number, x2: number, z2: number) {

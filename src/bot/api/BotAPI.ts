@@ -37,7 +37,7 @@ export default class BotAPI {
         this.surface = createBotSurface(bot.client, log);
 
         this.util = new Utility();
-        this.interface = new Interface();
+        this.interface = new Interface(this);
         this.bank = new Bank(this);
         this.player = new Player(this);
         this.inventory = new Inventory(this);

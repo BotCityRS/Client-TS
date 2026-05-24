@@ -1,3 +1,4 @@
+import './test-dom-shim.js';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import Timer from '../api/Timer.js';
 import { createBotApiForTests, createStubClientState, stubClientAsClient } from '../testSupport/stubBotClient.js';

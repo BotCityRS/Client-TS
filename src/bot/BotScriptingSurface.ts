@@ -7,6 +7,7 @@ import { LocAngle } from '#/dash3d/LocAngle.js';
 import { LocShape } from '#/dash3d/LocShape.js';
 import type World from '#/dash3d/World.js';
 import LinkList from '#/datastruct/LinkList.js';
+import { ClientProt } from '#/io/ClientProt.js';
 import type Packet from '#/io/Packet.js';
 import type { BotLogFn } from '#/bot/BotLog.js';
 
@@ -33,10 +34,18 @@ type ClientAccess = {
     minusedlevel: number;
     mapBuildBaseX: number;
     mapBuildBaseZ: number;
+    runenergy: number;
+    runweight: number;
+    inMultizone: number;
+    membersAccount: number;
     dialogInputOpen: boolean;
     redrawChatback: boolean;
     /** Sidebar root from `IF_OPENMAIN_SIDE` / `IF_OPENSIDE`; `-1` when using normal tab overlays only. */
     sideModalId: number;
+    mainModalId: number;
+    mainOverlayId: number;
+    chatComId: number;
+    tutComId: number;
     sideOverlayId: number[];
     sideTab: number;
     groundObj: (LinkList<ClientObj> | null)[][][];
@@ -79,6 +88,30 @@ export default class BotScriptingSurface {
         return a.sideOverlayId[a.sideTab] ?? -1;
     }
 
+    get mainModalRootId(): number {
+        return acc(this.client).mainModalId;
+    }
+
+    get mainOverlayRootId(): number {
+        return acc(this.client).mainOverlayId;
+    }
+
+    get sideModalRootId(): number {
+        return acc(this.client).sideModalId;
+    }
+
+    get sideTab(): number {
+        return acc(this.client).sideTab;
+    }
+
+    get chatRootId(): number {
+        return acc(this.client).chatComId;
+    }
+
+    get tutorialRootId(): number {
+        return acc(this.client).tutComId;
+    }
+
     /** All sidebar tab roots from `IF_SETTAB` (includes combat UI in its slot even when another tab is selected). */
     get sidebarTabOverlayRootIds(): readonly number[] {
         return acc(this.client).sideOverlayId.slice();
@@ -86,6 +119,22 @@ export default class BotScriptingSurface {
 
     get currentLevel(): number {
         return acc(this.client).minusedlevel;
+    }
+
+    get runEnergy(): number {
+        return acc(this.client).runenergy;
+    }
+
+    get runWeight(): number {
+        return acc(this.client).runweight;
+    }
+
+    get inMultizone(): number {
+        return acc(this.client).inMultizone;
+    }
+
+    get membersAccount(): number {
+        return acc(this.client).membersAccount;
     }
 
     get skillLevel(): number[] {
@@ -132,6 +181,18 @@ export default class BotScriptingSurface {
 
     get out(): Packet {
         return acc(this.client).out;
+    }
+
+    submitCountDialog(amount: number): boolean {
+        const a = acc(this.client);
+        if (!a.dialogInputOpen || !Number.isFinite(amount)) {
+            return false;
+        }
+        a.out.pIsaac(ClientProt.RESUME_P_COUNTDIALOG);
+        a.out.p4(Math.trunc(amount));
+        a.dialogInputOpen = false;
+        a.redrawChatback = true;
+        return true;
     }
 
     /** Resets the client's 90s idle watchdog (same as DOM input); avoids IDLE_TIMER while bot runs. */
@@ -223,6 +284,28 @@ export default class BotScriptingSurface {
         }
 
         return client.pathfindSteps(srcX, srcZ, x, z, false, 0, 0, angle, shape + 1, 0);
+    }
+
+    /** Walkable tile steps to a scene tile; -1 if unreachable or pathing is unavailable. */
+    pathfindStepsToTile(srcX: number, srcZ: number, x: number, z: number): number {
+        const a = acc(this.client);
+        if (!a.ingame || !a.world) {
+            return -1;
+        }
+        return (this.client as unknown as {
+            pathfindSteps(
+                srcX: number,
+                srcZ: number,
+                dx: number,
+                dz: number,
+                tryNearest: boolean,
+                locWidth: number,
+                locLength: number,
+                locAngle: number,
+                locShape: number,
+                forceapproach: number
+            ): number;
+        }).pathfindSteps(srcX, srcZ, x, z, false, 0, 0, 0, 0, 0);
     }
 
     async login(username: string, password: string, reconnect: boolean): Promise<void> {

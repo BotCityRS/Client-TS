@@ -1,3 +1,4 @@
+import '../__tests__/test-dom-shim.js';
 import type { Client } from '#/client/Client.js';
 import type Bot from '../Bot.js';
 import BotAPI from '../api/BotAPI.js';
@@ -8,6 +9,11 @@ export type MenuDispatch = {
     p1: number;
     p2: number;
     p3: number;
+};
+
+export type PacketWrite = {
+    method: 'pIsaac' | 'p4';
+    value: number;
 };
 
 /** Minimal `Client` surface for `BotScriptingSurface` + `BotAPI.doAction` without canvas. */
@@ -27,7 +33,17 @@ export type StubClientState = {
         faceEntity: number;
         combatCycle: number;
         primaryAnim: number;
+        primaryAnimFrame: number;
+        primaryAnimDelay: number;
+        primaryAnimLoop: number;
         routeLength: number;
+        chatMessage: string | null;
+        chatTimer: number;
+        health: number;
+        totalHealth: number;
+        damageValues: Int32Array;
+        damageTypes: Int32Array;
+        damageCycles: Int32Array;
     } | null;
     statEffectiveLevel: number[];
     statBaseLevel: number[];
@@ -35,8 +51,17 @@ export type StubClientState = {
     minusedlevel: number;
     mapBuildBaseX: number;
     mapBuildBaseZ: number;
+    runenergy: number;
+    runweight: number;
+    inMultizone: number;
+    membersAccount: number;
     dialogInputOpen: boolean;
     redrawChatback: boolean;
+    mainModalId: number;
+    mainOverlayId: number;
+    sideModalId: number;
+    chatComId: number;
+    tutComId: number;
     sideOverlayId: number[];
     sideTab: number;
     groundObj: unknown[][][] | null;
@@ -44,6 +69,7 @@ export type StubClientState = {
     loginUser: string;
     loginPass: string;
     out: { pos: number; pIsaac: (n: number) => void; p4: (n: number) => void };
+    outWrites: PacketWrite[];
     idleTimer: number;
     dispatches: MenuDispatch[];
     doAction(this: StubClientState & { doAction(optionId: number): void }, optionId: number): void;
@@ -65,6 +91,7 @@ function makeGroundObjGrid(): unknown[][][] {
 
 export function createStubClientState(overrides?: Partial<Omit<StubClientState, 'doAction' | 'dispatches'>>): StubClientState {
     const sideOverlayId = new Array(14).fill(-1);
+    const outWrites: PacketWrite[] = [];
     const state: StubClientState = {
         ingame: true,
         menuAction: new Int32Array(500),
@@ -81,7 +108,17 @@ export function createStubClientState(overrides?: Partial<Omit<StubClientState, 
             faceEntity: -1,
             combatCycle: 0,
             primaryAnim: -1,
-            routeLength: 0
+            primaryAnimFrame: -1,
+            primaryAnimDelay: -1,
+            primaryAnimLoop: -1,
+            routeLength: 0,
+            chatMessage: null,
+            chatTimer: 0,
+            health: 0,
+            totalHealth: 0,
+            damageValues: new Int32Array(4),
+            damageTypes: new Int32Array(4),
+            damageCycles: new Int32Array(4)
         },
         statEffectiveLevel: new Array(25).fill(1),
         statBaseLevel: new Array(25).fill(1),
@@ -89,8 +126,17 @@ export function createStubClientState(overrides?: Partial<Omit<StubClientState, 
         minusedlevel: 0,
         mapBuildBaseX: 0,
         mapBuildBaseZ: 0,
+        runenergy: 0,
+        runweight: 0,
+        inMultizone: 0,
+        membersAccount: 0,
         dialogInputOpen: false,
         redrawChatback: false,
+        mainModalId: -1,
+        mainOverlayId: -1,
+        sideModalId: -1,
+        chatComId: -1,
+        tutComId: -1,
         sideOverlayId,
         sideTab: 0,
         groundObj: makeGroundObjGrid(),
@@ -99,9 +145,10 @@ export function createStubClientState(overrides?: Partial<Omit<StubClientState, 
         loginPass: 'p',
         out: {
             pos: 0,
-            pIsaac: () => {},
-            p4: () => {}
+            pIsaac: (n: number) => outWrites.push({ method: 'pIsaac', value: n }),
+            p4: (n: number) => outWrites.push({ method: 'p4', value: n })
         },
+        outWrites,
         idleTimer: 0,
         dispatches: [],
         doAction(optionId: number): void {

@@ -2,7 +2,7 @@ import { BOT_MENU_BANK_CLOSE } from '../botLegacyMenuOpcodes.js';
 import BankInterfaceItem from "./base/BankInterfaceItem";
 import ItemContainer from "./base/ItemContainer";
 import type WorldObjectEntity from "./base/WorldObjectEntity";
-import BotAPI from "./BotAPI";
+import type BotAPI from "./BotAPI";
 
 const BANK_ROOT_IF = 2005;
 const BANK_BOOTH_LOC_IDS = [2213, 3045];

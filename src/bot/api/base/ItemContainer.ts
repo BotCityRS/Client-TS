@@ -8,7 +8,8 @@ type InterfaceItemConstructor<T extends InterfaceItem> = new (
     interfaceId: number,
     slot: number,
     id: number,
-    count: number
+    count: number,
+    itemType?: ObjType
 ) => T;
 
 export default class ItemContainer<T extends InterfaceItem> {
@@ -22,8 +23,8 @@ export default class ItemContainer<T extends InterfaceItem> {
         this.InterfaceItemType = InterfaceItemType;
     }
 
-    private createItem(slot: number, id: number, count: number): T {
-        return new this.InterfaceItemType(this.api, this.interfaceId, slot, id, count);
+    private createItem(slot: number, id: number, count: number, itemType: ObjType): T {
+        return new this.InterfaceItemType(this.api, this.interfaceId, slot, id, count, itemType);
     }
 
     getContainerSize() {
@@ -39,6 +40,85 @@ export default class ItemContainer<T extends InterfaceItem> {
         return (this.getItemById(id)?.count ?? -1) >= count;
     }
 
+    getItems(): T[] {
+        const items: T[] = [];
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            const item = this.getItemBySlot(slot);
+            if (item) {
+                items.push(item);
+            }
+        }
+        return items;
+    }
+
+    getEmptySlots(): number[] {
+        const slots: number[] = [];
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            if (!this.getItemBySlot(slot)) {
+                slots.push(slot);
+            }
+        }
+        return slots;
+    }
+
+    getFreeSlotCount(): number {
+        return this.getEmptySlots().length;
+    }
+
+    isEmpty(): boolean {
+        return this.getItems().length === 0;
+    }
+
+    count(id: number): number {
+        let total = 0;
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            const item = this.getItemBySlot(slot);
+            if (item?.id === id) {
+                total += item.count;
+            }
+        }
+        return total;
+    }
+
+    countAll(ids: number[]): number {
+        let total = 0;
+        const wanted = new Set(ids);
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            const item = this.getItemBySlot(slot);
+            if (item && wanted.has(item.id)) {
+                total += item.count;
+            }
+        }
+        return total;
+    }
+
+    find(predicate: (item: T) => boolean): T | null {
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            const item = this.getItemBySlot(slot);
+            if (item && predicate(item)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    findAll(predicate: (item: T) => boolean): T[] {
+        const items: T[] = [];
+        const size = this.getContainerSize();
+        for (let slot = 0; slot < size; slot++) {
+            const item = this.getItemBySlot(slot);
+            if (item && predicate(item)) {
+                items.push(item);
+            }
+        }
+        return items;
+    }
+
     getItemBySlot(slotId: number): T | null {
         const inv = this.api.interface.getInterface(this.interfaceId);
         const types = inv?.linkObjType;
@@ -50,7 +130,7 @@ export default class ItemContainer<T extends InterfaceItem> {
         const slotCount = counts[slotId] ?? 0;
         if (slotItem > 0) {
             const realSlotItem = ObjType.list(slotItem - 1);
-            return this.createItem(slotId, realSlotItem.id, slotCount);
+            return this.createItem(slotId, realSlotItem.id, slotCount, realSlotItem);
         }
         return null;
     }

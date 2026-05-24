@@ -1,5 +1,5 @@
-import type BotAPI from "./BotAPI";
-import Utility from "./Utility";
+import type BotAPI from './BotAPI';
+import Utility from './Utility';
 import { LEGACY_WORLD_PATHS } from '../walk/walkGraph.js';
 
 export type PathNode = [x: number, z: number];
@@ -37,6 +37,30 @@ export default class World {
         return px >= 0 && pz >= 0;
     }
 
+    getPlane(): number {
+        return this.api.surface.currentLevel;
+    }
+
+    getBase(): PathNode {
+        return [this.api.surface.sceneBaseTileX, this.api.surface.sceneBaseTileZ];
+    }
+
+    localToWorld(x: number, z: number): PathNode {
+        return [x + this.api.surface.sceneBaseTileX, z + this.api.surface.sceneBaseTileZ];
+    }
+
+    worldToLocal(x: number, z: number): PathNode {
+        return [x - this.api.surface.sceneBaseTileX, z - this.api.surface.sceneBaseTileZ];
+    }
+
+    getPlayerWorldPos(): PathNode | null {
+        const pos = this.api.player.getWorldPosition();
+        if (pos.x < 0 || pos.z < 0) {
+            return null;
+        }
+        return [pos.x, pos.z];
+    }
+
     distanceTo(x: number, z: number) {
         if (!this.hasValidPlayerTile()) {
             return Number.POSITIVE_INFINITY;
@@ -46,6 +70,10 @@ export default class World {
         const px = this.api.player.getLocalX();
         const pz = this.api.player.getLocalZ();
         return Utility.getDistance(px, pz, x - offsetX, z - offsetZ);
+    }
+
+    distanceToWorld(x: number, z: number) {
+        return this.distanceTo(x, z);
     }
 
     moveTo(x: number, z: number) {
