@@ -154,6 +154,33 @@ describe('CDNManager', () => {
         ]);
     });
 
+    test('normalizes module CDN entries relative to the manifest URL', async () => {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+            scripts: [
+                {
+                    name: 'ModuleScript',
+                    moduleUrl: './scripts/ModuleScript.js'
+                }
+            ]
+        }));
+        const manager = new CDNManager();
+
+        const results = await manager.loadScripts();
+        const official = results.find(result => result.source.id === OFFICIAL_CDN_SOURCE_ID);
+
+        expect(official?.scripts).toEqual([
+            {
+                name: 'ModuleScript',
+                startScript: '',
+                updateScript: '',
+                endScript: '',
+                htmlSetupScript: '',
+                buildFromHtmlScript: 'return new this();',
+                moduleUrl: new URL('./scripts/ModuleScript.js', OFFICIAL_CDN_MANIFEST_URL).href
+            }
+        ]);
+    });
+
     test('isolates remote failures from local CDN scripts', async () => {
         globalThis.fetch = async () => {
             throw new Error('offline');

@@ -2,7 +2,7 @@ export const LOCAL_CDN_SOURCE_ID = 'local';
 export const OFFICIAL_CDN_SOURCE_ID = 'official';
 export const LOCAL_SCRIPT_STORAGE_PREFIX = 'localScript_';
 export const CDN_SOURCE_STORAGE_KEY = 'botScriptCDNSources';
-export const OFFICIAL_CDN_MANIFEST_URL = 'https://botcityrs.github.io/scripts/manifest.json';
+export const OFFICIAL_CDN_MANIFEST_URL = 'https://botcityrs.github.io/Scripts/manifest.json';
 
 export type CDNSourceType = 'local' | 'remote';
 
@@ -13,6 +13,8 @@ export interface BotScriptDefinition {
     endScript: string;
     htmlSetupScript: string;
     buildFromHtmlScript: string;
+    moduleUrl?: string;
+    exportName?: string;
 }
 
 export interface CDNSource {
@@ -53,7 +55,7 @@ function sourceIdFromUrl(manifestUrl: string): string {
     return `remote_${Math.abs(hash).toString(36)}`;
 }
 
-function normalizeScriptDefinition(raw: unknown): BotScriptDefinition | null {
+function normalizeScriptDefinition(raw: unknown, manifestUrl?: string): BotScriptDefinition | null {
     if (!raw || typeof raw !== 'object') {
         return null;
     }
@@ -63,7 +65,12 @@ function normalizeScriptDefinition(raw: unknown): BotScriptDefinition | null {
         return null;
     }
 
-    return {
+    let moduleUrl: string | undefined;
+    if (typeof data.moduleUrl === 'string' && data.moduleUrl.trim()) {
+        moduleUrl = manifestUrl ? new URL(data.moduleUrl.trim(), manifestUrl).href : data.moduleUrl.trim();
+    }
+
+    const script: BotScriptDefinition = {
         name: data.name.trim(),
         startScript: typeof data.startScript === 'string' ? data.startScript : '',
         updateScript: typeof data.updateScript === 'string' ? data.updateScript : '',
@@ -71,9 +78,18 @@ function normalizeScriptDefinition(raw: unknown): BotScriptDefinition | null {
         htmlSetupScript: typeof data.htmlSetupScript === 'string' ? data.htmlSetupScript : '',
         buildFromHtmlScript: typeof data.buildFromHtmlScript === 'string' ? data.buildFromHtmlScript : 'return new this();'
     };
+
+    if (moduleUrl) {
+        script.moduleUrl = moduleUrl;
+    }
+    if (typeof data.exportName === 'string' && data.exportName.trim()) {
+        script.exportName = data.exportName.trim();
+    }
+
+    return script;
 }
 
-function scriptsFromManifest(raw: unknown): BotScriptDefinition[] {
+function scriptsFromManifest(raw: unknown, manifestUrl?: string): BotScriptDefinition[] {
     const entries = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as { scripts?: unknown }).scripts)
@@ -81,7 +97,7 @@ function scriptsFromManifest(raw: unknown): BotScriptDefinition[] {
             : [];
 
     return entries.flatMap(entry => {
-        const script = normalizeScriptDefinition(entry);
+        const script = normalizeScriptDefinition(entry, manifestUrl);
         return script ? [script] : [];
     });
 }
@@ -235,7 +251,7 @@ export default class CDNManager {
             throw new Error(`HTTP ${response.status} loading ${source.manifestUrl}`);
         }
 
-        return scriptsFromManifest(await response.json());
+        return scriptsFromManifest(await response.json(), source.manifestUrl);
     }
 
     private loadStoredRemoteSources(): CDNSource[] {

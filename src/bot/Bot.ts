@@ -9,14 +9,7 @@ import {
     writeStoredBotDebugFlags
 } from './botDebugStorage.js';
 import BotAPI from './api/BotAPI';
-import AutoFisher from './scripts/AutoFisher';
-import AutoFlaxPicker from './scripts/AutoFlaxPicker';
-import AutoKiller from './scripts/AutoKiller';
-import AutoWalker from './scripts/AutoWalker';
-import PathRecorder from './scripts/PathRecorder';
-import AutoWoodcutter from './scripts/AutoWoodcutter';
 import BotScript from './scripts/BotScript';
-import LumbyThievSuicide from './scripts/LumbyThievSuicide';
 import ScriptLoader from './scripts/ScriptLoader';
 import { LOCAL_CDN_SOURCE_ID, type BotScriptDefinition } from './scripts/CDNManager';
 import { formatDetail } from './api/botApiAssert.js';
@@ -31,9 +24,15 @@ import {
 } from './BotAccountsStore.js';
 
 /** Script list key: constructor `name` (preserved by bundle + Terser `keep_classnames`). */
-function scriptRegistryKey(scriptCtor: new (...args: unknown[]) => unknown): string {
+function scriptRegistryKey(scriptCtor: { name: string }): string {
     return scriptCtor.name;
 }
+
+type BotScriptConstructor = {
+    name: string;
+    htmlSetup(base: HTMLElement): void;
+    buildFromHtml(base: HTMLElement): BotScript;
+};
 
 const MAX_LOG_LINES = 4000;
 type BotTab = 'script' | 'cdn' | 'accounts' | 'debug' | 'logs';
@@ -44,7 +43,7 @@ export default class Bot {
     intervalHandle: number;
 
     api: BotAPI;
-    scripts: any[];
+    scripts: BotScriptConstructor[];
 
     currentScript: BotScript | null = null;
 
@@ -224,8 +223,13 @@ export default class Bot {
         this.refreshDebugToggleInputs();
     }
 
-    private scriptVisibleInUi(scriptCtor: new (...args: unknown[]) => BotScript): boolean {
-        const instance = new scriptCtor();
+    private createScriptInstance(scriptCtor: BotScriptConstructor): BotScript {
+        const Ctor = scriptCtor as unknown as { new (): BotScript };
+        return new Ctor();
+    }
+
+    private scriptVisibleInUi(scriptCtor: BotScriptConstructor): boolean {
+        const instance = this.createScriptInstance(scriptCtor);
         if (!this.debugModeEnabled && instance.isDebugScript) {
             return false;
         }
@@ -404,7 +408,7 @@ export default class Bot {
     constructor(client: Client) {
         this.client = client;
 
-        this.scripts = [ScriptLoader, PathRecorder, AutoKiller, AutoFisher, AutoFlaxPicker, AutoWoodcutter, LumbyThievSuicide, AutoWalker];
+        this.scripts = [ScriptLoader];
         this.api = new BotAPI(this);
 
         this.intervalHandle = -1;
@@ -434,7 +438,7 @@ export default class Bot {
                 const del = document.getElementById('deleteBot');
                 if (del) {
                     const key = scriptRegistryKey(this.scripts[i]);
-                    del.hidden = new this.scripts[i]().isSystemScript || !this.localScriptNamesByRegistryKey.has(key);
+                    del.hidden = this.createScriptInstance(this.scripts[i]).isSystemScript || !this.localScriptNamesByRegistryKey.has(key);
                 }
                 this.setSummary(`Configure ${target} and click Start Bot.`);
                 break;
@@ -492,7 +496,16 @@ export default class Bot {
         this.setScriptChoice();
     }
 
-    private buildCdnScriptClass(script: BotScriptDefinition): new () => BotScript {
+    private async buildCdnScriptClass(script: BotScriptDefinition): Promise<BotScriptConstructor> {
+        if (script.moduleUrl) {
+            const module = await import(script.moduleUrl) as Record<string, unknown>;
+            const exported = module[script.exportName ?? 'default'];
+            if (typeof exported !== 'function') {
+                throw new Error(`CDN module ${script.moduleUrl} does not export ${script.exportName ?? 'default'}`);
+            }
+            return exported as unknown as BotScriptConstructor;
+        }
+
         return ScriptLoader.createScriptClass(
             script.name,
             script.startScript,
@@ -500,7 +513,7 @@ export default class Bot {
             script.endScript,
             script.htmlSetupScript,
             script.buildFromHtmlScript
-        ) as new () => BotScript;
+        ) as BotScriptConstructor;
     }
 
     async reloadScripts(): Promise<void> {
@@ -509,7 +522,7 @@ export default class Bot {
         const previousSelection = (elemBotScripts as HTMLSelectElement | null)?.value;
 
         for (let i = this.scripts.length - 1; i >= 0; i--) {
-            if (!new this.scripts[i]().isSystemScript) {
+            if (!this.createScriptInstance(this.scripts[i]).isSystemScript) {
                 this.scripts.splice(i, 1);
             }
         }
@@ -518,7 +531,7 @@ export default class Bot {
         this.renderScriptOptions(previousSelection);
 
         const systemKeys = new Set(this.scripts.map(script => scriptRegistryKey(script)));
-        const cdnScripts = new Map<string, new () => BotScript>();
+        const cdnScripts = new Map<string, BotScriptConstructor>();
         const results = await ScriptLoader.cdnManager.loadScripts();
         if (reloadRun !== this.reloadScriptsRun) {
             return;
@@ -539,7 +552,10 @@ export default class Bot {
 
             for (const script of result.scripts) {
                 try {
-                    const builtClass = this.buildCdnScriptClass(script);
+                    const builtClass = await this.buildCdnScriptClass(script);
+                    if (reloadRun !== this.reloadScriptsRun) {
+                        return;
+                    }
                     const key = scriptRegistryKey(builtClass);
                     if (systemKeys.has(key)) {
                         this.log('WARN', 'Bot.reloadScripts', 'Skipping CDN script that conflicts with a system script', { script: key });
