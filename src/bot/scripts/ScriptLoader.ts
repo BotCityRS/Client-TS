@@ -176,6 +176,9 @@ export default class ScriptLoader extends BotScript {
         intro.textContent = 'Load scripts from the local CDN and remote manifest sources.';
         base.appendChild(intro);
 
+        const reloadStatus = document.createElement('small');
+        reloadStatus.className = 'bot-hint';
+
         const sourcesSection = createSection(base, 'CDN sources');
         const cdnSourceList = document.createElement('div');
         cdnSourceList.id = 'botCdnSourcesList';
@@ -202,10 +205,36 @@ export default class ScriptLoader extends BotScript {
                 window.alert(err instanceof Error ? err.message : String(err));
             }
         };
+        const reloadScriptsButton = document.createElement('button');
+        reloadScriptsButton.className = 'bot-button';
+        reloadScriptsButton.type = 'button';
+        reloadScriptsButton.textContent = 'Update Scripts';
+        reloadScriptsButton.onclick = () => {
+            const bot = (globalThis as unknown as { bot?: { reloadScripts: () => Promise<void> } }).bot;
+            if (!bot) {
+                reloadStatus.textContent = 'Bot is not ready yet.';
+                return;
+            }
+
+            reloadScriptsButton.setAttribute('disabled', 'true');
+            reloadStatus.textContent = 'Updating scripts and refetching CDN manifests...';
+            void bot.reloadScripts()
+                .then(() => {
+                    reloadStatus.textContent = 'Scripts updated.';
+                })
+                .catch(err => {
+                    reloadStatus.textContent = err instanceof Error ? err.message : String(err);
+                })
+                .finally(() => {
+                    reloadScriptsButton.removeAttribute('disabled');
+                });
+        };
         const sourceActions = document.createElement('div');
         sourceActions.className = 'bot-actions';
         sourceActions.appendChild(addSourceButton);
+        sourceActions.appendChild(reloadScriptsButton);
         sourcesSection.appendChild(sourceActions);
+        sourcesSection.appendChild(reloadStatus);
     }
 
     static htmlSetup(base: HTMLElement) {
